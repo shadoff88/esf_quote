@@ -4,10 +4,28 @@
  */
 
 exports.handler = async (event, context) => {
+    // CORS headers for cross-origin requests
+    const headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Content-Type': 'application/json'
+    };
+
+    // Handle preflight OPTIONS request
+    if (event.httpMethod === 'OPTIONS') {
+        return {
+            statusCode: 200,
+            headers,
+            body: ''
+        };
+    }
+
     // Only allow POST requests
     if (event.httpMethod !== 'POST') {
         return {
             statusCode: 405,
+            headers,
             body: JSON.stringify({ error: 'Method not allowed' })
         };
     }
@@ -21,6 +39,7 @@ exports.handler = async (event, context) => {
         if (!operation || !fields) {
             return {
                 statusCode: 400,
+                headers,
                 body: JSON.stringify({
                     success: false,
                     error: 'Missing required fields: operation and fields are required'
@@ -32,6 +51,7 @@ exports.handler = async (event, context) => {
         if (operation !== 'create' && operation !== 'update') {
             return {
                 statusCode: 400,
+                headers,
                 body: JSON.stringify({
                     success: false,
                     error: 'Invalid operation. Must be "create" or "update"'
@@ -43,6 +63,7 @@ exports.handler = async (event, context) => {
         if (operation === 'update' && !recordId) {
             return {
                 statusCode: 400,
+                headers,
                 body: JSON.stringify({
                     success: false,
                     error: 'recordId is required for update operations'
@@ -59,6 +80,7 @@ exports.handler = async (event, context) => {
             console.error('Missing AirTable credentials in environment variables');
             return {
                 statusCode: 500,
+                headers,
                 body: JSON.stringify({
                     success: false,
                     error: 'Server configuration error'
@@ -100,6 +122,7 @@ exports.handler = async (event, context) => {
             console.error('AirTable API error:', result);
             return {
                 statusCode: response.status,
+                headers,
                 body: JSON.stringify({
                     success: false,
                     error: result.error?.message || `AirTable API error: ${response.status}`
@@ -110,9 +133,7 @@ exports.handler = async (event, context) => {
         // Return success response
         return {
             statusCode: 200,
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers,
             body: JSON.stringify({
                 success: true,
                 recordId: result.id,
@@ -124,6 +145,7 @@ exports.handler = async (event, context) => {
         console.error('Function error:', error);
         return {
             statusCode: 500,
+            headers,
             body: JSON.stringify({
                 success: false,
                 error: error.message || 'Internal server error'
