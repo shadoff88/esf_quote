@@ -1,0 +1,70 @@
+## 2025-11-07: Netlify Serverless Function Implementation + Async Auto-Save
+
+### Changes Made:
+
+1. **Created Netlify Serverless Function** (netlify/functions/airtable-submit.js)
+   - Securely handles AirTable API calls server-side
+   - API key never exposed to browser
+   - Supports both POST (create) and PATCH (update) operations
+   - Implements same data cleaning logic (removes empty strings, filters internal fields)
+   - Returns structured JSON responses with success/error states
+
+2. **Created Netlify Configuration** (netlify.toml)
+   - Defined functions directory and publish path
+   - Added redirect from /api/* to /.netlify/functions/:splat
+
+3. **Updated Frontend Auto-Save Logic** (js/app.js)
+   - Removed hardcoded AirTable API key (line 5379-5381)
+   - Modified autoSaveToAirTable() to call serverless function instead of direct API
+   - Modified submitToAirTable() to call serverless function
+   - Data cleaning logic moved to serverless function
+
+4. **Made Auto-Save Non-Blocking** (js/app.js, nextStep method)
+   - Removed loading overlay display during auto-save
+   - Changed auto-save to fire-and-forget pattern (no await)
+   - Form immediately advances to next step without waiting
+   - Auto-save failures are logged but don't interrupt user experience
+
+5. **Removed Loading Overlay UI**
+   - Deleted loading overlay HTML (index.html lines 77-83)
+   - Deleted loading overlay CSS (style.css lines 1253-1343)
+   - Removed showLoadingOverlay(), hideLoadingOverlay(), showLoadingScreen(), hideLoadingScreen() methods
+   - Kept auto-save indicator for visual feedback
+
+6. **Updated Cache-buster**
+   - Changed version from v20251106f to v20251106g in index.html
+
+### Justification:
+
+**Security**: API key is now stored server-side in environment variables and never exposed to browser source code. This prevents unauthorized access to the AirTable base.
+
+**User Experience**: Form navigation is now instantaneous. Users don't wait for auto-save to complete before moving to the next step. This creates a smoother, more responsive experience.
+
+**Data Integrity**: Auto-save still happens reliably in the background. If auto-save fails, it's logged but doesn't interrupt the user's flow. Final submission still waits for confirmation.
+
+**Architecture**: Serverless function pattern is scalable, secure, and follows best practices for JAMstack applications. The same function handles both create and update operations with proper validation.
+
+### Environment Setup Required:
+
+In Netlify dashboard, add environment variables:
+- AIRTABLE_API_KEY=pat[YOUR_KEY_HERE]
+- AIRTABLE_BASE_ID=appTll6JoqW04YvJs
+
+### Testing:
+
+Test auto-save and final submission work correctly:
+1. Fill out contact info (email required)
+2. Advance through steps - should be instant
+3. Check console for auto-save success messages
+4. Complete form and submit
+5. Verify records created in AirTable
+
+### Files Modified:
+- js/app.js (removed API key, updated methods, removed loading overlay code)
+- index.html (removed loading overlay HTML, updated cache-buster)
+- css/style.css (removed loading overlay styles)
+
+### Files Created:
+- netlify/functions/airtable-submit.js
+- netlify.toml
+- log.txt (this file)
