@@ -5792,15 +5792,15 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
     /**
      * Show auto-save indicator briefly
      */
-    showAutoSaveIndicator() {
-        const indicator = document.getElementById('autoSaveIndicator');
-        if (indicator) {
-            indicator.style.display = 'flex';
-            setTimeout(() => {
-                indicator.style.display = 'none';
-            }, 2000);
-        }
-    }
+    // showAutoSaveIndicator() {
+    //     const indicator = document.getElementById('autoSaveIndicator');
+    //     if (indicator) {
+    //         indicator.style.display = 'flex';
+    //         setTimeout(() => {
+    //             indicator.style.display = 'none';
+    //         }, 2000);
+    //     }
+    // }
 
     /**
      * Submit form data to AirTable (final submission)
