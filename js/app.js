@@ -10,6 +10,10 @@ class EasyFreightForm {
         this.currentStep = 1;
         this.totalSteps = 0;
         
+        // Session management
+        this.sessionId = null;
+        this.isRestoringSession = false;
+        
         // Focus and typing state tracking
         this.isInputFocused = false;
         this.isUserTyping = false;
@@ -38,7 +42,7 @@ class EasyFreightForm {
             
             // Service classification
             shipping_payment: '',
-            local_delivery: '',
+            //local_delivery: '',
             shipment_method: '',
             container_type: '',
             air_weight_category: '',
@@ -88,7 +92,11 @@ class EasyFreightForm {
         // Setup event listeners
         this.setupEventListeners();
         
-        // Load saved data
+        // Check for session restoration from URL parameters
+        // DISABLED: Requires backend API setup - uncomment when API is ready
+        // this.checkSessionRestoration();
+        
+        // Load saved data from localStorage (browser-only persistence)
         this.loadSavedData();
         
         // Render first step
@@ -228,6 +236,39 @@ class EasyFreightForm {
                 e.preventDefault();
                 this.saveData();
                 this.showAutoSave();
+            }
+        });
+        
+        // Event delegation for file upload buttons (prevents duplicate event listeners)
+        this.formContent.addEventListener('click', (e) => {
+            // Handle file upload button clicks
+            if (e.target.closest('.file-upload-btn')) {
+                const btn = e.target.closest('.file-upload-btn');
+                const docId = btn.dataset.doc;
+                const action = btn.dataset.action;
+                
+                if (docId && action) {
+                    // Update document status
+                    this.formData.document_status[docId] = action;
+                    
+                    // Update UI
+                    this.updateDocumentStatus(docId, action);
+                    
+                    if (action === 'upload') {
+                        this.openFileUpload(docId);
+                    }
+                }
+            }
+            
+            // Handle file remove button clicks
+            if (e.target.closest('.uploaded-file-remove')) {
+                const btn = e.target.closest('.uploaded-file-remove');
+                const docId = btn.dataset.doc;
+                const fileName = btn.dataset.file;
+                
+                if (docId && fileName) {
+                    this.removeFile(docId, fileName);
+                }
             }
         });
         
@@ -686,7 +727,7 @@ class EasyFreightForm {
                                 <div class="radio-description">Small packages and documents</div>
                             </div>
                         </div>
-                        ${this.formData.goods_location === 'not_shipped_yet' ? `
+                        ${(this.formData.goods_location === 'not_shipped_yet' || this.formData.direction === 'export') ? `
                         <div class="radio-card ${this.formData.shipment_method === 'not_sure' ? 'selected' : ''}">
                             <input type="radio" name="shipment_method" value="not_sure" class="radio-input" ${this.formData.shipment_method === 'not_sure' ? 'checked' : ''}>
                             <div class="radio-icon"></div>
@@ -817,7 +858,7 @@ class EasyFreightForm {
                             <input type="radio" name="export_service_needed" value="shipping_and_clearance" class="radio-input" ${this.formData.export_service_needed === 'shipping_and_clearance' ? 'checked' : ''}>
                             <div class="radio-icon"></div>
                             <div class="radio-content">
-                                <div class="radio-title">🚢 Shipping + Clearance</div>
+                                <div class="radio-title">Shipping + Clearance</div>
                                 <div class="radio-description">Arrange shipping and export documentation</div>
                             </div>
                         </div>
@@ -825,7 +866,7 @@ class EasyFreightForm {
                             <input type="radio" name="export_service_needed" value="clearance_only" class="radio-input" ${this.formData.export_service_needed === 'clearance_only' ? 'checked' : ''}>
                             <div class="radio-icon"></div>
                             <div class="radio-content">
-                                <div class="radio-title">📋 Only Clearance</div>
+                                <div class="radio-title">Only Clearance</div>
                                 <div class="radio-description">Export documentation only (I have shipping arranged)</div>
                             </div>
                         </div>
@@ -908,14 +949,15 @@ class EasyFreightForm {
                     <label class="question-label" for="delivery_address">
                         ${isExport ? 'Collection Address (Optional):' : 'Delivery Address (Optional):'}
                     </label>
-                    <textarea 
+                    <input 
+                        type="text"
                         id="delivery_address" 
                         name="delivery_address"
                         class="form-input" 
-                        rows="3"
                         placeholder="${isExport ? 'Enter collection address...' : 'Enter delivery address...'}"
-                        style="resize: vertical;"
-                    >${this.formData.delivery_address || ''}</textarea>
+                        value="${this.formData.delivery_address || ''}"
+                        autocomplete="off"
+                    />
                 </div>
                 ` : ''}
             </div>
@@ -1418,13 +1460,6 @@ class EasyFreightForm {
                         <i class="fas fa-clock"></i>
                         Don't have yet
                     </button>
-                    ${(this.formData.direction === 'export' && doc.id !== 'export_declaration') ? `
-                    <button type="button" class="file-upload-btn ${this.formData.document_status[doc.id] === 'need_help' ? 'selected' : ''}" 
-                            data-doc="${doc.id}" data-action="need_help">
-                        <i class="fas fa-question-circle"></i>
-                        Need help creating
-                    </button>
-                    ` : ''}
                 </div>
                 
                 <div class="uploaded-files" id="files_${doc.id}">
@@ -1531,8 +1566,8 @@ Each pallet: 250 kg, Total weight: 750 kg"
                         <div class="uploaded-file-size">${this.formatFileSize(file.size)}</div>
                     </div>
                 </div>
-                <button type="button" class="uploaded-file-remove" data-doc="${docId}" data-file="${file.name}">
-                    <i class="fas fa-trash"></i>
+                <button type="button" class="uploaded-file-remove" data-doc="${docId}" data-file="${file.name}" title="Remove this file">
+                    <i class="fas fa-trash-alt"></i>
                 </button>
             </div>
         `).join('');
@@ -1561,12 +1596,19 @@ Each pallet: 250 kg, Total weight: 750 kg"
                         </h3>
                         
                         <div class="review-summary" style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-sm);">
-                            ${summary.map(item => `
-                                <div style="display: flex; justify-content: space-between; padding: var(--spacing-xs) 0; border-bottom: 1px solid var(--border-color); font-size: var(--font-size-xs);">
+                            ${summary.map(item => {
+                                // For address fields, use full width span
+                                const isAddress = item.label.includes('Address');
+                                const gridSpan = isAddress ? 'grid-column: 1 / -1;' : '';
+                                const flexDirection = isAddress ? 'flex-direction: column; align-items: flex-start;' : '';
+                                const valueStyle = isAddress ? 'margin-top: 0.25rem; white-space: pre-line; text-align: left;' : 'text-align: right; margin-left: 1rem;';
+                                
+                                return `
+                                <div style="${gridSpan} display: flex; justify-content: space-between; ${flexDirection} padding: var(--spacing-xs) 0; border-bottom: 1px solid var(--border-color); font-size: var(--font-size-xs);">
                                     <strong>${item.label}:</strong>
-                                    <span style="text-align: right; margin-left: 1rem;">${item.value}</span>
+                                    <span style="${valueStyle}">${item.value}</span>
                                 </div>
-                            `).join('')}
+                            `}).join('')}
                         </div>
                     </div>
                     
@@ -1602,9 +1644,21 @@ Each pallet: 250 kg, Total weight: 750 kg"
                     </div>
                     ` : ''}
                     
+                    <!-- Delivery Address -->
+                    ${this.formData.delivery_address && this.formData.delivery_address.trim() ? `
+                    <div style="background: #f8f9fa; border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid var(--primary-color);">
+                        <h3 style="margin-bottom: 1rem; color: var(--primary-color); display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="fas fa-map-marker-alt"></i>
+                            ${this.formData.direction === 'export' ? 'Local Collection Address' : 'Local Delivery Address'}
+                        </h3>
+                        <div style="background: #fff; padding: 1rem; border-radius: 4px; border: 1px solid #dee2e6;">
+                            <p style="font-size: var(--font-size-sm); line-height: 1.6; color: #333; margin: 0; white-space: pre-line;">${this.formData.delivery_address.trim()}</p>
+                        </div>
+                    </div>
+                    ` : ''}
+                    
                     <div style="background: linear-gradient(135deg, #fff3cd, #ffeaa7); border: 1px solid #ffc107; border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem;">
                         <h4 style="margin-bottom: 1rem; color: #856404; display: flex; align-items: center; gap: 0.5rem;">
-                            <i class="fas fa-shield-alt"></i>
                             Important Legal Notice
                         </h4>
                         <p style="margin: 0; font-size: 0.9rem; line-height: 1.5; color: #856404;">
@@ -1911,6 +1965,12 @@ Each pallet: 250 kg, Total weight: 750 kg"
     }
     
     shouldShowPaymentTerms() {
+        // For EXPORT: Always show payment terms (export service selection)
+        if (this.formData.direction === 'export') {
+            return true;
+        }
+        
+        // For IMPORT: Only show if goods not yet shipped
         // Skip Incoterms if goods have arrived or arriving within 48 hours
         if (this.formData.goods_location === 'arrived' || 
             this.formData.goods_location === '1_2_days') {
@@ -1946,6 +2006,10 @@ Each pallet: 250 kg, Total weight: 750 kg"
         
         // Calculate routing and scoring
         this.calculateScoring();
+        
+        // Save to Airtable after each step completion
+        // DISABLED: Requires backend API setup - uncomment when API is ready
+        // this.saveToAirtable();
         
         // Note: Auto-routing removed - always continue to document step
         // Specialist/urgent routing happens after all info is collected
@@ -2157,7 +2221,9 @@ Each pallet: 250 kg, Total weight: 750 kg"
         }
         // Standard routing - general cases with readiness requirements
         else if ((urgency_score >= 4 && readiness_score >= 6) || 
-                 (urgency_score >= 4 && this.formData.shipment_method === 'sea_freight')) {
+                 (urgency_score >= 4 && this.formData.shipment_method === 'sea_freight') ||
+                 (this.formData.shipment_method === 'courier') ||
+                 (this.formData.arrival_method === 'courier')) {
             this.formData.routing_decision = 'standard';
         }
         // Education routing - needs guidance or planning
@@ -2174,8 +2240,7 @@ Each pallet: 250 kg, Total weight: 750 kg"
         // Bind radio events  
         this.bindRadioEvents();
         
-        // Bind file upload events
-        this.bindFileUploadEvents();
+        // File upload events now handled by event delegation in setupEventListeners()
         
         // Step-specific events
         switch (step.id) {
@@ -2361,33 +2426,8 @@ Each pallet: 250 kg, Total weight: 750 kg"
         });
     }
     
-    bindFileUploadEvents() {
-        document.querySelectorAll('.file-upload-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const docId = e.currentTarget.dataset.doc;
-                const action = e.currentTarget.dataset.action;
-                
-                // Update document status
-                this.formData.document_status[docId] = action;
-                
-                // Update UI
-                this.updateDocumentStatus(docId, action);
-                
-                if (action === 'upload') {
-                    this.openFileUpload(docId);
-                }
-            });
-        });
-        
-        // File remove buttons
-        document.querySelectorAll('.uploaded-file-remove').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const docId = e.currentTarget.dataset.doc;
-                const fileName = e.currentTarget.dataset.file;
-                this.removeFile(docId, fileName);
-            });
-        });
-    }
+    // File upload events now handled by event delegation in setupEventListeners()
+    // This prevents duplicate event listeners when re-rendering steps
     
     bindContactEvents() {
         // Real-time email validation
@@ -2538,8 +2578,6 @@ Each pallet: 250 kg, Total weight: 750 kg"
         // Special handling for packing list - re-render the section to show/hide text inputs
         if (docId === 'packing_list') {
             this.renderStep();
-            // Re-bind events after re-render
-            this.bindEvents();
         }
         
         // Auto-focus next question in document step
@@ -2946,6 +2984,216 @@ Each pallet: 250 kg, Total weight: 750 kg"
         }
     }
     
+    // Session restoration from URL parameters
+    checkSessionRestoration() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get('sessionId');
+        const stepId = urlParams.get('stepId');
+        
+        if (sessionId) {
+            this.isRestoringSession = true;
+            this.restoreSession(sessionId, stepId);
+        }
+    }
+    
+    async restoreSession(sessionId, stepId = null) {
+        try {
+            // Fetch session data from API
+            const response = await fetch(`tables/form_sessions?search=${sessionId}&limit=1`);
+            
+            if (!response.ok) {
+                throw new Error('Failed to fetch session data');
+            }
+            
+            const result = await response.json();
+            
+            if (result.data && result.data.length > 0) {
+                const sessionData = result.data[0];
+                
+                // Parse and restore form data
+                if (sessionData.form_data) {
+                    const parsedData = JSON.parse(sessionData.form_data);
+                    this.formData = { ...this.formData, ...parsedData };
+                }
+                
+                // Store session ID for updates
+                this.sessionId = sessionData.id;
+                
+                // Restore step position
+                if (stepId) {
+                    // Find step by ID
+                    const stepIndex = this.steps.findIndex(step => step.id === stepId);
+                    if (stepIndex !== -1) {
+                        this.currentStep = stepIndex + 1;
+                    } else {
+                        // Default to saved step or current step
+                        this.currentStep = sessionData.current_step || 1;
+                    }
+                } else {
+                    this.currentStep = sessionData.current_step || 1;
+                }
+                
+                // Update session status to active
+                await this.updateSession({ status: 'active', last_activity: new Date().toISOString() });
+                
+                // Show restoration notification
+                this.showSessionRestoredNotification();
+            } else {
+                console.warn('Session not found:', sessionId);
+                this.showSessionNotFoundNotification();
+            }
+        } catch (error) {
+            console.error('Error restoring session:', error);
+            this.showSessionErrorNotification();
+        }
+    }
+    
+    // Save form data to API table after each step
+    async saveToAirtable() {
+        try {
+            const visibleSteps = this.getVisibleSteps();
+            const currentVisibleIndex = this.getCurrentVisibleStepIndex();
+            const currentStepConfig = visibleSteps[currentVisibleIndex];
+            
+            // Calculate completion percentage
+            const completionPercentage = Math.round(((currentVisibleIndex + 1) / visibleSteps.length) * 100);
+            
+            // Prepare session data
+            const sessionData = {
+                current_step: this.currentStep,
+                current_step_id: currentStepConfig ? currentStepConfig.id : '',
+                form_data: JSON.stringify(this.formData),
+                first_name: this.formData.first_name || '',
+                last_name: this.formData.last_name || '',
+                email: this.formData.email || '',
+                phone: this.formData.phone || '',
+                company_name: this.formData.company_name || '',
+                direction: this.formData.direction || '',
+                status: 'active',
+                last_activity: new Date().toISOString(),
+                completion_percentage: completionPercentage,
+                urgency_score: this.formData.urgency_score || 0,
+                complexity_score: this.formData.complexity_score || 0,
+                abandoned_email_sent_3min: false,
+                abandoned_email_sent_1hour: false,
+                abandoned_email_sent_24hour: false
+            };
+            
+            if (this.sessionId) {
+                // Update existing session
+                await this.updateSession(sessionData);
+            } else {
+                // Create new session
+                const response = await fetch('tables/form_sessions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(sessionData)
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    this.sessionId = result.id;
+                    
+                    // Generate user-friendly session reference
+                    // Generate session ID in same format as Quote ID: EF-YYYYMMDDHHmmss
+const now = new Date();
+const year = now.getFullYear();
+const month = String(now.getMonth() + 1).padStart(2, '0');
+const day = String(now.getDate()).padStart(2, '0');
+const hours = String(now.getHours()).padStart(2, '0');
+const minutes = String(now.getMinutes()).padStart(2, '0');
+const seconds = String(now.getSeconds()).padStart(2, '0');
+const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
+                    await this.updateSession({ session_id: sessionRef });
+                } else {
+                    console.error('Failed to create session');
+                }
+            }
+        } catch (error) {
+            console.error('Error saving to Airtable:', error);
+            // Don't block form progression if save fails
+        }
+    }
+    
+    async updateSession(updates) {
+        if (!this.sessionId) return;
+        
+        try {
+            const response = await fetch(`tables/form_sessions/${this.sessionId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+            });
+            
+            if (!response.ok) {
+                console.error('Failed to update session');
+            }
+        } catch (error) {
+            console.error('Error updating session:', error);
+        }
+    }
+    
+    // Generate restoration link for email
+    getRestorationLink(stepId = null) {
+        if (!this.sessionId) return null;
+        
+        const baseUrl = window.location.origin + window.location.pathname;
+        const params = new URLSearchParams({ sessionId: this.sessionId });
+        
+        if (stepId) {
+            params.append('stepId', stepId);
+        }
+        
+        return `${baseUrl}?${params.toString()}`;
+    }
+    
+    // Notification methods
+    showSessionRestoredNotification() {
+        this.showNotification('Session restored! Continuing from where you left off.', 'success');
+    }
+    
+    showSessionNotFoundNotification() {
+        this.showNotification('Session not found. Starting a new form.', 'warning');
+    }
+    
+    showSessionErrorNotification() {
+        this.showNotification('Error restoring session. Starting a new form.', 'error');
+    }
+    
+    showNotification(message, type = 'info') {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `session-notification session-notification-${type}`;
+        notification.innerHTML = `
+            <div class="session-notification-content">
+                <span class="session-notification-icon">${this.getNotificationIcon(type)}</span>
+                <span class="session-notification-message">${message}</span>
+            </div>
+        `;
+        
+        // Add to page
+        document.body.appendChild(notification);
+        
+        // Show notification
+        setTimeout(() => notification.classList.add('show'), 100);
+        
+        // Remove after 5 seconds
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => notification.remove(), 300);
+        }, 5000);
+    }
+    
+    getNotificationIcon(type) {
+        const icons = {
+            success: '✓',
+            error: '✕',
+            warning: '⚠',
+            info: 'ℹ'
+        };
+        return icons[type] || icons.info;
+    }
+    
     // Auto-save functionality removed
     
     hasUnsavedChanges() {
@@ -3009,7 +3257,7 @@ Each pallet: 250 kg, Total weight: 750 kg"
         const filesContainer = document.getElementById(`files_${docId}`);
         if (filesContainer) {
             filesContainer.innerHTML = this.renderUploadedFiles(docId);
-            this.bindFileUploadEvents(); // Re-bind events for new elements
+            // Event delegation handles remove buttons automatically
         }
         
         // Update readiness score
@@ -3026,7 +3274,7 @@ Each pallet: 250 kg, Total weight: 750 kg"
             const filesContainer = document.getElementById(`files_${docId}`);
             if (filesContainer) {
                 filesContainer.innerHTML = this.renderUploadedFiles(docId);
-                this.bindFileUploadEvents();
+                // Event delegation handles remove buttons automatically
             }
             
             // Update readiness score
@@ -3104,9 +3352,15 @@ Each pallet: 250 kg, Total weight: 750 kg"
             summary.push({ label: 'Payment Terms', value: paymentLabels[this.formData.shipping_payment] });
         }
         
-        if (this.formData.local_delivery) {
-            summary.push({ label: 'Local Delivery', value: this.formData.local_delivery === 'yes' ? 'Required' : 'Not required' });
+        if (this.formData.needs_port_delivery) {
+            const isExport = this.formData.direction === 'export';
+            const label = isExport ? 'Collection Service' : 'Local Delivery';
+            summary.push({ label: label, value: this.formData.needs_port_delivery === 'yes' ? 'Required' : 'Not required' });
+            
+            // Note: Delivery address is now shown in a separate section below the summary grid
+            // This prevents the long address from breaking the 2-column layout
         }
+
         
         // Export Destination
         if (this.formData.destination_country) {
@@ -3122,12 +3376,7 @@ Each pallet: 250 kg, Total weight: 750 kg"
             summary.push({ label: 'Export Service', value: serviceLabels[this.formData.export_service_needed] });
         }
         
-        // Delivery Address (if provided and delivery is required)
-        if (this.formData.needs_port_delivery === 'yes' && this.formData.delivery_address && this.formData.delivery_address.trim()) {
-            const isExport = this.formData.direction === 'export';
-            const label = isExport ? 'Collection Address' : 'Delivery Address';
-            summary.push({ label: label, value: this.formData.delivery_address.trim() });
-        }
+        // Delivery Address - now shown in separate section, not in summary
         
         // Cargo Details
         if (this.formData.cargo_type) {
@@ -3174,14 +3423,13 @@ Each pallet: 250 kg, Total weight: 750 kg"
             const status = this.formData.document_status[doc.id];
             if (status) {
                 const statusLabels = {
-                    'upload': '✅ Uploaded',
-                    'dont_have': '⏳ Don\'t have yet', 
-                    'need_help': '❓ Need help creating'
+                    'upload': 'Uploaded',
+                    'dont_have': 'Don\'t have yet'
                 };
                 
                 let docTitle = doc.title;
                 // Clean up title formatting
-                docTitle = docTitle.replace(/^[📄📋✈️🚢📦⚠️]\s*/, ''); // Remove emoji prefixes
+                //docTitle = docTitle.replace(/^[📄📋✈️🚢📦⚠️]\s*/, ''); // Remove emoji prefixes
                 
                 documentSummary.push({
                     title: docTitle,
@@ -3191,6 +3439,127 @@ Each pallet: 250 kg, Total weight: 750 kg"
         });
         
         return documentSummary;
+    }
+    
+    generateQuoteEstimation() {
+        // Only show quote estimation for import pathway
+        if (this.formData.direction !== 'import') {
+            return '';
+        }
+        
+        // Check if we should show pricing
+        const shouldShowPricing = this.shouldShowPricing();
+        
+        if (!shouldShowPricing) {
+            return `
+                <div style="background: #f8f9fa; border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid #6c757d;">
+                    <h3 style="margin-bottom: 1rem; color: var(--primary-color); font-size: 1.25rem;">
+                        Quote Estimation
+                    </h3>
+                    <p style="margin: 0; font-size: 0.95rem; line-height: 1.6; color: #495057;">
+                        Based on your shipment details, we'll provide a personalised quote after reviewing your information. 
+                        Our specialist will contact you with accurate pricing tailored to your specific needs.
+                    </p>
+                </div>
+            `;
+        }
+        
+        // Calculate base service fee
+        let baseFee = 197;
+        let additionalFees = [];
+        
+        // Customs Client Code fee
+        if (this.formData.customs_code_status === 'need_help') {
+            baseFee += 95;
+            additionalFees.push({ label: 'Customs Client Code Application', amount: 95 });
+        }
+        
+        // BIO Security fee (for all food/beverages)
+        if (this.formData.cargo_type === 'food_beverages') {
+            baseFee += 67;
+            additionalFees.push({ label: 'BIO Security Clearance', amount: 67 });
+        }
+        
+        // Calculate GST
+        const gst = baseFee * 0.15;
+        const totalWithGst = baseFee + gst;
+        
+        // Generate estimation HTML
+        return `
+            <div style="background: linear-gradient(135deg, #e8f5e9, #c8e6c9); border: 2px solid #4caf50; border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 1.5rem;">
+                <h3 style="margin-bottom: 1rem; color: #2e7d32; font-size: 1.25rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="font-size: 1.5rem;">💰</span>
+                    Estimated Service Fee
+                </h3>
+                
+                <div style="background: white; border-radius: 0.5rem; padding: 1rem; margin-bottom: 1rem;">
+                    <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
+                        <span style="font-weight: 500; color: #333;">Base Customs Clearance</span>
+                        <span style="font-weight: 600; color: #333;">NZD $197.00</span>
+                    </div>
+                    
+                    ${additionalFees.map(fee => `
+                        <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
+                            <span style="color: #666;">${fee.label}</span>
+                            <span style="font-weight: 500; color: #333;">NZD $${fee.amount.toFixed(2)}</span>
+                        </div>
+                    `).join('')}
+                    
+                    <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 2px solid #4caf50; margin-top: 0.5rem;">
+                        <span style="font-weight: 500; color: #333;">Subtotal (excl. GST)</span>
+                        <span style="font-weight: 600; color: #333;">NZD $${baseFee.toFixed(2)}</span>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; padding: 0.5rem 0;">
+                        <span style="color: #666;">GST (15%)</span>
+                        <span style="font-weight: 500; color: #333;">NZD $${gst.toFixed(2)}</span>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; padding: 0.75rem 0; background: #f1f8f4; margin: 0.5rem -1rem -1rem -1rem; padding-left: 1rem; padding-right: 1rem; border-radius: 0 0 0.5rem 0.5rem;">
+                        <span style="font-weight: 700; color: #2e7d32; font-size: 1.1rem;">TOTAL (incl. GST)</span>
+                        <span style="font-weight: 700; color: #2e7d32; font-size: 1.1rem;">NZD $${totalWithGst.toFixed(2)}</span>
+                    </div>
+                </div>
+                
+                ${this.formData.needs_port_delivery === 'yes' ? `
+                    <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 0.5rem; padding: 0.75rem; margin-top: 1rem;">
+                        <p style="margin: 0; font-size: 0.9rem; color: #856404; line-height: 1.5;">
+                            <strong>Local Delivery Service:</strong> Variable pricing based on location and cargo specifications. 
+                            Our team will provide a detailed quote.
+                        </p>
+                    </div>
+                ` : ''}
+                
+                <div style="margin-top: 1rem; padding: 0.75rem; background: white; border-radius: 0.5rem; border-left: 3px solid #2196f3;">
+                    <p style="margin: 0; font-size: 0.85rem; color: #666; line-height: 1.5;">
+                        <strong style="color: #2196f3;">Note:</strong> This is an estimate for Easy Freight's service fees only. 
+                        Government charges (Customs Transaction Fee, Import Duty, GST on goods value, and MPI fees if applicable) 
+                        are additional and will be calculated based on your shipment details.
+                    </p>
+                </div>
+            </div>
+        `;
+    }
+    
+    shouldShowPricing() {
+        // Don't show pricing for specialist routes
+        if (this.formData.routing_decision === 'specialist') {
+            return false;
+        }
+        
+        // Don't show pricing for FCL
+        if (this.formData.container_type === 'fcl') {
+            return false;
+        }
+        
+        // Show pricing for CIF, urgent, or standard routes
+        if (this.formData.shipping_payment === 'supplier_pays_cif' ||
+            this.formData.routing_decision === 'urgent' ||
+            this.formData.routing_decision === 'standard') {
+            return true;
+        }
+        
+        return false;
     }
     
     generatePackingInfoSummary() {
@@ -3222,6 +3591,15 @@ Each pallet: 250 kg, Total weight: 750 kg"
     
     submitForm() {
         this.showLoadingScreen();
+        
+        // Mark session as completed
+        if (this.sessionId) {
+            this.updateSession({ 
+                status: 'completed', 
+                completion_percentage: 100,
+                last_activity: new Date().toISOString() 
+            });
+        }
         
         // Simulate processing
         this.simulateProcessing().then(() => {
@@ -3297,10 +3675,13 @@ Each pallet: 250 kg, Total weight: 750 kg"
         const routingConfig = this.getRoutingConfig(routing);
         
         resultsHeader.className = `results-header ${routing}`;
-        resultsHeader.innerHTML = `
-            <h3 style="font-size: 1rem; margin-bottom: 0.25rem;">${routingConfig.title}</h3>
-            <p style="font-size: 0.75rem; margin: 0; opacity: 0.9;">${routingConfig.subtitle}</p>
-        `;
+        // Don't show broker assignment notification for educational pathway
+        resultsHeader.innerHTML = routing !== 'education' ? `
+            <div style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 1.5rem; border-radius: 0.5rem; text-align: center; margin-bottom: 1rem;">
+                <h3 style="font-size: 1.1rem; margin-bottom: 0.5rem; font-weight: 600;">Task Assigned to Our Brokers</h3>
+                <p style="font-size: 0.85rem; margin: 0; opacity: 0.95;">We will be in contact soon. Please review your quote estimate below.</p>
+            </div>
+        ` : '';
         
         resultsBody.innerHTML = `
             <div style="display: grid; gap: 1.25rem; margin-top: 1.25rem;">
@@ -3325,11 +3706,12 @@ Each pallet: 250 kg, Total weight: 750 kg"
             });
         }
         
-        // Bind download button
-        const downloadBtn = document.getElementById('downloadSubmissionBtn');
-        if (downloadBtn) {
-            downloadBtn.addEventListener('click', () => {
-                this.downloadSubmission();
+        // Bind pay now button
+        const payNowBtn = document.getElementById('payNowBtn');
+        if (payNowBtn) {
+            payNowBtn.addEventListener('click', () => {
+                // Placeholder for Airtable/Stripe integration
+                alert(`Payment integration will be connected here.\nQuote Reference: ${this.generateReferenceId()}\n\nThis will redirect to Stripe payment with quote details from Airtable.`);
             });
         }
         
@@ -3359,7 +3741,6 @@ Each pallet: 250 kg, Total weight: 750 kg"
             
             // Service classification
             shipping_payment: '',
-            local_delivery: '',
             shipment_method: '',
             container_type: '',
             air_weight_category: '',
@@ -3417,24 +3798,24 @@ Each pallet: 250 kg, Total weight: 750 kg"
         
         const configs = {
             urgent: {
-                title: '🚨 URGENT PRIORITY',
+                title: 'URGENT PRIORITY',
                 subtitle: 'High Priority Processing',
                 description: 'Your shipment requires immediate attention.'
             },
             standard: {
-                title: isCustomsClearanceOnly ? '⭐ CUSTOMS CLEARANCE' : '⭐ STANDARD PROCESSING', 
+                title: isCustomsClearanceOnly ? 'CUSTOMS CLEARANCE' : 'STANDARD PROCESSING', 
                 subtitle: isCustomsClearanceOnly ? 'Customs Clearance Service' : 'Standard Processing Queue',
                 description: isCustomsClearanceOnly ? 
                     'Your goods will be cleared through customs using our standard process.' :
                     'Your request will be processed using our standard timeline.'
             },
             education: {
-                title: '📚 PLANNING ASSISTANCE',
+                title: 'PLANNING ASSISTANCE',
                 subtitle: 'Consultation & Guidance',
                 description: 'We\'ll provide helpful resources and guidance for your shipping needs.'
             },
             specialist: {
-                title: isFreightForwarding ? '🚢 FREIGHT FORWARDING' : '🔬 SPECIALIST REQUIRED',
+                title: isFreightForwarding ? 'FREIGHT FORWARDING' : 'SPECIALIST REQUIRED',
                 subtitle: isFreightForwarding ? 'Full Logistics Service' : 'Specialist Review Needed',
                 description: isFreightForwarding ? 
                     'Your shipment requires comprehensive freight forwarding and logistics coordination.' :
@@ -3658,12 +4039,18 @@ Each pallet: 250 kg, Total weight: 750 kg"
                     <h4 style="margin-bottom: 0.5rem; color: #fff; font-size: 0.8rem;">Local Delivery Service</h4>
                     <div style="display: grid; gap: 0.3rem; font-size: 0.7rem;">
                         <div style="display: flex; justify-content: space-between;">
-                            <span>Local Delivery</span>
+                            <span>Local ${this.formData.direction === 'export' ? 'Collection' : 'Delivery'}</span>
                             <span>Variable*</span>
                         </div>
+                        ${this.formData.delivery_address && this.formData.delivery_address.trim() ? `
+                        <div style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 4px;">
+                            <strong>${this.formData.direction === 'export' ? 'Collection' : 'Delivery'} Address:</strong><br>
+                            <span style="opacity: 0.95;">${this.formData.delivery_address.trim()}</span>
+                        </div>
+                        ` : ''}
                     </div>
                     <p style="margin-top: 0.5rem; font-size: 0.65rem; opacity: 0.8;">
-                        *Price for Local delivery is Variable - our Local delivery specialist will contact you for details
+                        *Price for Local ${this.formData.direction === 'export' ? 'collection' : 'delivery'} is Variable - our Local delivery specialist will contact you for details
                     </p>
                 </div>
                 ` : ''}
@@ -3793,39 +4180,46 @@ Each pallet: 250 kg, Total weight: 750 kg"
     }
     
     generateResetButton() {
+        const showPricing = this.shouldShowPricing();
+        const referenceId = this.generateReferenceId();
+        
         return `
             <div style="text-align: center; margin-top: 2rem; padding: 1.5rem; border-top: 1px solid var(--border-color);">
                 <div class="quote-actions" style="display: flex; gap: 1rem; justify-content: center; margin-bottom: 1.5rem; flex-wrap: wrap;">
+                    ${showPricing ? `
+                    <button 
+                        type="button" 
+                        id="payNowBtn"
+                        class="btn btn-success"
+                        style="padding: 1rem 2rem; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; background: #10b981;"
+                    >
+                        Pay Now
+                    </button>
                     <button 
                         type="button" 
                         id="printQuoteBtn"
                         class="btn btn-primary print-btn"
                         style="padding: 1rem 2rem; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem;"
                     >
-                        <i class="fas fa-print"></i>
                         Print Quote
                     </button>
-                    <button 
-                        type="button" 
-                        id="downloadSubmissionBtn"
-                        class="btn btn-secondary"
-                        style="padding: 1rem 2rem; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem;"
-                    >
-                        <i class="fas fa-download"></i>
-                        Download Data
-                    </button>
+                    ` : `
+                    <p style="margin: 1rem 0; padding: 1rem; background: #f8f9fa; border-radius: 0.5rem; color: #666;">
+                        <strong>Reference ID: ${referenceId}</strong><br>
+                        Please quote this reference when contacting our specialists.
+                    </p>
+                    `}
                     <button 
                         type="button" 
                         id="resetFormBtn"
                         class="btn btn-secondary"
                         style="padding: 1rem 2rem; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem;"
                     >
-                        <i class="fas fa-redo"></i>
                         Start Over
                     </button>
                 </div>
                 <p style="margin: 0; font-size: 0.875rem; color: var(--text-secondary);">
-                    Reference ID: ${this.generateReferenceId()}
+                    Reference ID: ${referenceId}
                 </p>
             </div>
         `;
@@ -5330,7 +5724,361 @@ Each pallet: 250 kg, Total weight: 750 kg"
         };
     }
 }
+    // ==================== AIRTABLE INTEGRATION METHODS ====================
 
+    /**
+     * Auto-save form progress to AirTable after each step (in-progress status)
+     * Uses serverless function to keep API key secure
+     */
+    async autoSaveToAirTable() {
+        try {
+            // Only auto-save if user has provided email (minimum required field)
+            if (!this.formData.email) {
+                return;
+            }
+
+            // Generate session ID if not exists
+            if (!this.formData.session_id) {
+                this.formData.session_id = this.generateSessionId();
+            }
+
+            // Prepare payload with in-progress status
+            const payload = this.prepareAirTablePayload();
+            payload.status = 'in_progress';
+
+            // Determine if creating new record or updating existing
+            const isUpdate = !!this.formData.airtable_record_id;
+            const operation = isUpdate ? 'update' : 'create';
+
+            // Prepare request for serverless function
+            const requestBody = {
+                operation: operation,
+                recordId: this.formData.airtable_record_id || null,
+                fields: payload
+            };
+
+            // Call serverless function
+            const response = await fetch('https://esfgrowin.netlify.app/.netlify/functions/airtable-submit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                // Store record ID for future updates
+                if (result.recordId && !this.formData.airtable_record_id) {
+                    this.formData.airtable_record_id = result.recordId;
+                    console.log('✅ Auto-saved to AirTable (new record):', result.recordId);
+                } else {
+                    console.log('✅ Auto-saved to AirTable (updated):', result.recordId);
+                }
+
+                // Show auto-save indicator briefly
+                this.showAutoSaveIndicator();
+            } else {
+                console.warn('Auto-save failed:', result.error);
+            }
+
+        } catch (error) {
+            // Silent fail for auto-save - don't interrupt user experience
+            console.log('Auto-save skipped:', error.message);
+        }
+    }
+
+    /**
+     * Show auto-save indicator briefly
+     */
+    showAutoSaveIndicator() {
+        const indicator = document.getElementById('autoSaveIndicator');
+        if (indicator) {
+            indicator.style.display = 'flex';
+            setTimeout(() => {
+                indicator.style.display = 'none';
+            }, 2000);
+        }
+    }
+
+    /**
+     * Submit form data to AirTable (final submission)
+     * Uses serverless function to keep API key secure
+     */
+    async submitToAirTable() {
+        try {
+            // Generate session ID if not exists
+            if (!this.formData.session_id) {
+                this.formData.session_id = this.generateSessionId();
+            }
+
+            // Prepare payload with completed status
+            const payload = this.prepareAirTablePayload();
+
+            // Determine if creating new record or updating existing
+            const isUpdate = !!this.formData.airtable_record_id;
+            const operation = isUpdate ? 'update' : 'create';
+
+            // Prepare request for serverless function
+            const requestBody = {
+                operation: operation,
+                recordId: this.formData.airtable_record_id || null,
+                fields: payload
+            };
+
+            // Call serverless function
+            const response = await fetch('https://esfgrowin.netlify.app/.netlify/functions/airtable-submit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.error || 'Submission failed');
+            }
+
+            return {
+                success: true,
+                recordId: result.recordId,
+                message: 'Form submitted successfully'
+            };
+
+        } catch (error) {
+            console.error('AirTable submission error:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Prepare AirTable payload from form data
+     */
+    prepareAirTablePayload() {
+        return {
+            // Contact Information
+            first_name: this.formData.first_name,
+            last_name: this.formData.last_name,
+            email: this.formData.email,
+            phone: this.formData.phone,
+            company_name: this.formData.company_name || '',
+            customer_type: this.formData.customer_type,
+            consent_checkbox: this.formData.consent_checkbox,
+
+            // Classification
+            direction: this.formData.direction,
+
+            // Import-specific (conditional)
+            goods_location: this.formData.goods_location || '',
+            arrival_method: this.formData.arrival_method || '',
+            arrival_timeline: this.formData.arrival_timeline || '',
+            customs_code_status: this.formData.customs_code_status || '',
+            customs_code_number: this.formData.customs_code_number || '',
+
+            // Export-specific (conditional)
+            export_service_needed: this.formData.export_service_needed || '',
+            destination_country: this.formData.destination_country || '',
+
+            // Service Classification
+            shipping_payment: this.formData.shipping_payment || '',
+            local_delivery: this.formData.local_delivery || '',
+            needs_port_delivery: this.formData.needs_port_delivery || '',
+            delivery_address: this.formData.delivery_address || '',
+            shipment_method: this.formData.shipment_method || '',
+            container_type: this.formData.container_type || '',
+            air_weight_category: this.formData.air_weight_category || '',
+
+            // Cargo Details
+            cargo_type: this.formData.cargo_type,
+            cargo_details: this.formData.cargo_details || '',
+            other_cargo_description: this.formData.other_cargo_description || '',
+            personal_item_condition: this.formData.personal_item_condition || '',
+            personal_item_mixed: this.formData.personal_item_mixed || false,
+            requires_temperature_control: this.formData.requires_temperature_control || false,
+
+            // Packing Information
+            packing_info_combined: this.formData.packing_info_combined || '',
+
+            // Document Status (individual fields, not nested object)
+            air_waybill_status: this.formData.document_status?.air_waybill || '',
+            bill_of_lading_status: this.formData.document_status?.bill_of_lading || '',
+            courier_receipt_status: this.formData.document_status?.courier_receipt || '',
+            commercial_invoice_status: this.formData.document_status?.commercial_invoice || '',
+            packing_list_status: this.formData.document_status?.packing_list || '',
+            export_declaration_status: this.formData.document_status?.export_declaration || '',
+            msds_status: this.formData.document_status?.msds || '',
+
+            // System Fields
+            status: 'completed',
+            session_id: this.formData.session_id || this.generateSessionId(),
+
+            // Include record ID if updating existing record
+            airtable_record_id: this.formData.airtable_record_id || ''
+        };
+    }
+
+    /**
+     * Generate unique session ID
+     */
+    generateSessionId() {
+        const timestamp = Date.now();
+        const random = Math.random().toString(36).substring(2, 15);
+        return `session_${timestamp}_${random}`;
+    }
+
+    /**
+     * Show submission error to user
+     */
+    showSubmissionError(errorMessage) {
+        const errorHtml = `
+            <div style="
+                background: #fff3cd;
+                border: 1px solid #ffc107;
+                border-radius: 8px;
+                padding: 20px;
+                margin: 20px;
+                text-align: center;
+            ">
+                <div style="font-size: 48px; margin-bottom: 10px;">⚠️</div>
+                <h3 style="color: #856404; margin-bottom: 10px;">Submission Error</h3>
+                <p style="color: #856404; margin-bottom: 20px;">
+                    We encountered an issue submitting your form. Please try again or contact us directly.
+                </p>
+                <div style="
+                    background: #fff;
+                    padding: 10px;
+                    border-radius: 4px;
+                    margin-bottom: 20px;
+                    font-family: monospace;
+                    font-size: 12px;
+                    color: #d32f2f;
+                ">
+                    ${errorMessage}
+                </div>
+                <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                    <button onclick="location.reload()" style="
+                        padding: 12px 24px;
+                        background: #ffc107;
+                        color: #000;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-weight: 600;
+                    ">
+                        Try Again
+                    </button>
+                    <a href="mailto:sales@easyfreight.co.nz" style="
+                        padding: 12px 24px;
+                        background: #007bff;
+                        color: #fff;
+                        border: none;
+                        border-radius: 4px;
+                        text-decoration: none;
+                        font-weight: 600;
+                        display: inline-block;
+                    ">
+                        Contact Us Directly
+                    </a>
+                </div>
+            </div>
+        `;
+
+        const formContainer = document.querySelector('.form-container');
+        if (formContainer) {
+            formContainer.innerHTML = errorHtml;
+            formContainer.style.display = 'block';
+        }
+    }
+
+// Add after EasyFreightForm class definition
+// Google Places Autocomplete - DISABLED due to CSP restrictions
+// Using plain textarea instead for better compatibility
+/*
+async function initAddressAutocomplete() {
+    // DISABLED: Content Security Policy blocks Google Maps scripts
+    // CSP Error: "script-src 'none'" prevents loading maps.googleapis.com
+    // 
+    // To enable Google Places in the future:
+    // 1. Update CSP headers to allow: https://maps.googleapis.com
+    // 2. Uncomment this function
+    // 3. Test thoroughly
+    
+    try {
+        const { PlacesService, AutocompleteSuggestion } = await google.maps.importLibrary("places");
+        
+        const setupAutocomplete = () => {
+            const addressFields = document.querySelectorAll('[name="delivery_address"]');
+            
+            addressFields.forEach(field => {
+                if (field && !field.dataset.autocompleteInitialized) {
+                    const autocompleteInput = new google.maps.places.PlaceAutocompleteElement({
+                        componentRestrictions: { country: ['nz'] },
+                    });
+                    
+                    autocompleteInput.addEventListener('gmp-placeselect', async ({ place }) => {
+                        await place.fetchFields({
+                            fields: ['displayName', 'formattedAddress'],
+                        });
+                        
+                        field.value = place.formattedAddress;
+                        
+                        if (window.easyFreightForm) {
+                            window.easyFreightForm.formData.delivery_address = place.formattedAddress;
+                        }
+                        
+                        field.dispatchEvent(new Event('input', { bubbles: true });
+                        field.dispatchEvent(new Event('change', { bubbles: true }));
+                    });
+                    
+                    field.parentNode.insertBefore(autocompleteInput, field);
+                    field.style.display = 'none';
+                    field.dataset.autocompleteInitialized = 'true';
+                    
+                    const autocompleteInputElement = autocompleteInput.querySelector('input');
+                    if (autocompleteInputElement) {
+                        autocompleteInputElement.addEventListener('input', (e) => {
+                            field.value = e.target.value;
+                            if (window.easyFreightForm) {
+                                window.easyFreightForm.formData.delivery_address = e.target.value;
+                            }
+                        });
+                        
+                        autocompleteInputElement.addEventListener('blur', (e) => {
+                            field.value = e.target.value;
+                            if (window.easyFreightForm) {
+                                window.easyFreightForm.formData.delivery_address = e.target.value;
+                            }
+                        });
+                    }
+                }
+            });
+        };
+        
+        setupAutocomplete();
+        
+        const observer = new MutationObserver(setupAutocomplete);
+        observer.observe(document.getElementById('formContent'), {
+            childList: true,
+            subtree: true
+        });
+    } catch (error) {
+        console.warn('Google Places Autocomplete could not be initialized:', error);
+    }
+}
+
+// Initialize when Google Maps loads - DISABLED
+// window.addEventListener('load', () => {
+//     if (window.google && window.google.maps) {
+//         initAddressAutocomplete();
+//     }
+// });
+*/
 // Initialize the form when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.easyFreightForm = new EasyFreightForm();
