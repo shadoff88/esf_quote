@@ -5723,7 +5723,7 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
             }
         };
     }
-}
+
     // ==================== AIRTABLE INTEGRATION METHODS ====================
 
     /**
@@ -6079,6 +6079,9 @@ async function initAddressAutocomplete() {
 //     }
 // });
 */
+
+} // End of EasyFreightForm class
+
 // Initialize the form when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.easyFreightForm = new EasyFreightForm();
