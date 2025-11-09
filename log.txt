@@ -68,3 +68,77 @@ Test auto-save and final submission work correctly:
 - netlify/functions/airtable-submit.js
 - netlify.toml
 - log.txt (this file)
+
+---
+
+## 2025-11-09: GitHub Repository Merge with Local Customizations
+
+### Changes Made:
+
+1. **Merged Latest GitHub Design Updates**
+   - Pulled latest version from https://github.com/shadoff88/esf_quote
+   - GitHub version had 706 more lines in app.js (6351 vs 5645 lines)
+   - GitHub version had 160 more lines in style.css (1420 vs 1260 lines)
+   - Integrated new features while preserving local customizations
+
+2. **Key Differences from GitHub Version Identified:**
+   - **Loading Animations**: GitHub has loading overlay with simulateProcessing()
+   - **Netlify Endpoint**: GitHub uses esfquote.netlify.app, local uses esfgrowin.netlify.app
+   - **Cache-buster**: Local has v20251106i version tag
+   - **HTML Structure**: GitHub includes Loading Overlay section (lines 81-94)
+   - **CSS Additions**: GitHub has Session Restoration Notifications styles
+   - **CSS Additions**: GitHub has Google Places Autocomplete styling improvements
+   - **Google Maps Script**: GitHub has improved autocomplete initialization
+
+3. **Preserved Local Customizations:**
+   - Removed all loading animation calls from submitForm() method
+   - Removed showLoadingScreen() call (line 3593)
+   - Removed await simulateProcessing() call (line 3606)
+   - Removed hideLoadingScreen() calls (lines 3619, 3625)
+   - Removed Loading Overlay HTML section from index.html
+   - Changed Netlify endpoint from esfquote.netlify.app to esfgrowin.netlify.app
+   - Maintained cache-buster version v20251106i in index.html
+
+4. **New Features Integrated from GitHub:**
+   - Enhanced Google Places Autocomplete with better initialization
+   - Session restoration notification styles (CSS lines 1285-1379)
+   - Improved Google Places dropdown styling (CSS lines 1381-1420)
+   - Fixed Google Maps API bootstrap loader (await removed from script creation)
+   - Updated container-calculator.js with latest version
+   - Enhanced mobile viewport handling and accessibility features
+
+5. **Files Updated:**
+   - index.html: Merged with loading overlay removed, cache-buster preserved
+   - js/app.js: Merged with loading animations removed, Netlify URL updated
+   - css/style.css: Full merge with all GitHub improvements
+   - js/container-calculator.js: Updated to GitHub version
+
+6. **Backups Created:**
+   - index.html.backup (6.7K)
+   - js/app.js.backup (248K)
+   - css/style.css.backup (28K)
+   - js/container-calculator.js.backup (32K)
+
+### Justification:
+
+**Design Consistency**: Integrated latest design improvements from GitHub while maintaining our performance optimizations and deployment configuration.
+
+**User Experience**: Kept the streamlined submission process without loading animations (instant response) while gaining improved Google Places autocomplete and session notifications.
+
+**Deployment**: Maintained correct Netlify endpoint (esfgrowin.netlify.app) for our production environment.
+
+**Safety**: All original files backed up before merge, allowing easy rollback if needed.
+
+### Line Count Changes:
+- app.js: 5645 → 6344 lines (GitHub had 6351, we removed 7 lines from submitForm)
+- style.css: 1260 → 1420 lines (160 new lines for notifications and autocomplete styling)
+- index.html: Maintained compact structure without loading overlay
+
+### Testing Required:
+
+1. Verify form submission works without loading animations
+2. Test Google Places autocomplete functionality
+3. Confirm Netlify function endpoint works correctly
+4. Validate session restoration notifications appear correctly
+5. Test container calculator with updated JS
+6. Verify mobile responsiveness with new viewport handling

@@ -11,9 +11,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <!-- Custom CSS -->
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/container-calculator.css">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <div class="container">
@@ -132,16 +137,104 @@
         </div>
     </div>
 
-    <!-- Google Places API (New Bootstrap Loader) -->
+    <!-- Google Places API (Fixed Bootstrap Loader) -->
     <script>
-        (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
+        (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{a=m.createElement("script");e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
           key: "AIzaSyATHnCNdVj_VrJNTFlNrvh3ilQNjgfRD1c",
           v: "weekly",
+        });
+        
+        // Initialize Google Places Autocomplete
+        let autocompleteInitialized = false;
+        
+        async function initAddressAutocomplete() {
+            if (autocompleteInitialized) return;
+            
+            try {
+                const { Autocomplete } = await google.maps.importLibrary("places");
+                
+                const setupAutocomplete = () => {
+                    // Look for input fields with name="delivery_address"
+                    const addressFields = document.querySelectorAll('input[name="delivery_address"]');
+                    
+                    addressFields.forEach(field => {
+                        // Only initialize if it's an HTMLInputElement and not already initialized
+                        if (field && field instanceof HTMLInputElement && !field.dataset.autocompleteInit) {
+                            try {
+                                const autocomplete = new google.maps.places.Autocomplete(field, {
+                                    componentRestrictions: { country: ['nz'] },
+                                    fields: ['formatted_address', 'address_components'],
+                                    types: ['address']
+                                });
+                                
+                                autocomplete.addListener('place_changed', () => {
+                                    const place = autocomplete.getPlace();
+                                    if (place && place.formatted_address) {
+                                        field.value = place.formatted_address;
+                                        
+                                        // Trigger input event to update formData
+                                        field.dispatchEvent(new Event('input', { bubbles: true }));
+                                        field.dispatchEvent(new Event('change', { bubbles: true }));
+                                        
+                                        // Hide the dropdown after selection
+                                        setTimeout(() => {
+                                            field.blur();
+                                            
+                                            // Force hide all pac-containers
+                                            const pacContainers = document.querySelectorAll('.pac-container');
+                                            pacContainers.forEach(container => {
+                                                container.style.visibility = 'hidden';
+                                                container.style.display = 'none';
+                                            });
+                                        }, 50);
+                                    }
+                                });
+                                
+                                // When field gets focus, show the dropdown if it was hidden
+                                field.addEventListener('focus', () => {
+                                    const pacContainers = document.querySelectorAll('.pac-container');
+                                    pacContainers.forEach(container => {
+                                        container.style.visibility = 'visible';
+                                        container.style.display = 'block';
+                                    });
+                                });
+                                
+                                field.dataset.autocompleteInit = 'true';
+                            } catch (err) {
+                                console.warn('Could not initialize autocomplete on field:', err);
+                            }
+                        }
+                    });
+                };
+                
+                // Setup on DOM ready
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', setupAutocomplete);
+                } else {
+                    setupAutocomplete();
+                }
+                
+                // Watch for form changes and re-initialize
+                const observer = new MutationObserver(setupAutocomplete);
+                const formContent = document.getElementById('formContent');
+                if (formContent) {
+                    observer.observe(formContent, { childList: true, subtree: true });
+                }
+                
+                autocompleteInitialized = true;
+            } catch (error) {
+                console.error('Error initializing Google Places:', error);
+            }
+        }
+        
+        // Initialize when page loads
+        window.addEventListener('load', () => {
+            setTimeout(initAddressAutocomplete, 1000); // Delay to ensure Google API is loaded
         });
     </script>
     
     <!-- JavaScript -->
     <script src="js/container-calculator.js"></script>
-    <script src="js/app.js?v=20251106g"></script>
+    <script src="js/app.js?v=20251106i"></script>
 </body>
 </html>

@@ -124,7 +124,7 @@ class ContainerCalculator {
                             <div class="container-name">Other</div>
                             <div class="custom-container-inputs" style="display: ${this.selectedContainer === 'custom' ? 'block' : 'none'}; margin-top: 5px;">
                                 <div class="custom-input-row">
-                                    <input type="text" id="custom-container-description" placeholder="Other: e.g. Open top" value="${this.customContainerDescription || ''}" style="width: calc(100% - 10px); margin: 5px;">
+                                    <input type="text" id="custom-container-description" placeholder="e.g. Open top" value="${this.customContainerDescription || ''}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
                                 </div>
                             </div>
                         </div>
