@@ -96,13 +96,18 @@ exports.handler = async (event, context) => {
             if (key === 'airtable_record_id') continue;
 
             // Fix double-encoded JSON strings (defensive coding)
+            // Some values may be double or triple encoded: ""value"" or """value"""
             let cleanValue = value;
-            if (typeof value === 'string' && value.startsWith('"') && value.endsWith('"')) {
-                try {
-                    cleanValue = JSON.parse(value);
-                } catch (e) {
-                    // If parse fails, use original value
-                    cleanValue = value;
+            if (typeof value === 'string') {
+                // Keep parsing until we get a non-string or no more quotes
+                while (typeof cleanValue === 'string' && cleanValue.startsWith('"') && cleanValue.endsWith('"') && cleanValue.length > 1) {
+                    try {
+                        const parsed = JSON.parse(cleanValue);
+                        cleanValue = parsed;
+                    } catch (e) {
+                        // If parse fails, stop trying
+                        break;
+                    }
                 }
             }
 
