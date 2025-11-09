@@ -5840,7 +5840,7 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
             };
 
             // Call serverless function
-            const response = await fetch('https://esfgrowin.netlify.app/.netlify/functions/airtable-submit', {
+            const response = await fetch('https://esfquote.netlify.app/.netlify/functions/airtable-submit', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
