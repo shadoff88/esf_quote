@@ -174,3 +174,145 @@ Created focused test to verify Step 1 auto-save functionality works correctly be
 
 ### Note:
 Auto-save to AirTable happens asynchronously in background. Test confirms form advancement works correctly and auto-save indicator displays. AirTable record verification would require separate API check.
+
+---
+
+## 2025-11-10: Resume/Restore Functionality Implementation (v20251110b)
+
+### Changes Made:
+
+1. **Created Netlify Serverless Function for Fetching Records** (netlify/functions/airtable-fetch.js)
+   - GET endpoint accepts recordId query parameter
+   - Validates recordId format (must start with 'rec')
+   - Fetches record from AirTable "Form Submissions" table
+   - Security: Only returns records with status='in_progress'
+   - Returns 403 for completed/submitted records (privacy protection)
+   - Returns 404 for non-existent records
+   - Same CORS headers as airtable-submit.js
+   - Secure: API key never exposed to client
+
+2. **Frontend Resume Functionality** (js/app.js)
+   - Added checkResumeParameter() method to detect ?resume=recXXX in URL
+   - Added restoreFromAirTable(recordId) method to fetch and restore record
+   - Maps all AirTable fields back to formData structure
+   - Reconstructs nested document_status object from flat fields
+   - Stores airtable_record_id for future updates
+   - Shows loading notification during restore (non-auto-dismissing)
+   - Removes loading notification after success/failure
+
+3. **Intelligent Step Detection** (js/app.js)
+   - Added detectCurrentStep() method
+   - Analyzes filled fields to determine last completed step
+   - Handles conditional logic (import vs export flows)
+   - Returns appropriate step number based on progress
+   - Ensures user continues from where they left off
+
+4. **URL Cleanup** (js/app.js)
+   - Added cleanResumeURL() method
+   - Removes ?resume parameter after successful restore
+   - Uses history.replaceState() to avoid page reload
+   - Prevents duplicate restore attempts
+
+5. **Enhanced Notification System** (js/app.js)
+   - Updated showNotification() to accept autoDismiss parameter (default: true)
+   - Returns notification element reference for manual removal
+   - Supports persistent notifications (loading indicators)
+   - Updated notification messages for better UX:
+     * Success: "Welcome back! Your form has been restored."
+     * Warning: "Unable to find your saved form. Please start a new submission."
+     * Error: "Could not restore your session. Starting fresh."
+
+6. **Fallback Logic** (js/app.js)
+   - If ?resume parameter present: Fetch from AirTable (takes precedence)
+   - If no ?resume parameter: Fall back to localStorage
+   - If restore fails: Clean URL and load localStorage data
+   - Graceful degradation ensures user never loses functionality
+
+### Justification:
+
+**User Experience**: Users can now continue their form submission from exactly where they left off via email link. No need to re-enter data. Loading indicator provides feedback during restore.
+
+**Security**: Only in-progress records can be restored (completed records are protected). RecordId validation prevents malicious requests. API key remains server-side.
+
+**Reliability**: Intelligent step detection ensures users land on the correct step based on their actual progress, not a stored step number that might be out of sync.
+
+**Email Automation Compatibility**: Designed to work with AirTable automation sending links like: https://esfquote.netlify.app/?resume=rec1234567890
+
+**Flexibility**: If resume fails (record not found, network error, etc.), system falls back to localStorage data. User experience is never broken.
+
+### Email Automation Setup:
+
+In AirTable automation (3-minute reminder):
+- Trigger: When record created with status='in_progress'
+- Wait: 3 minutes
+- Condition: status is still 'in_progress'
+- Action: Send email with resume link: `https://esfquote.netlify.app/?resume={{record_id}}`
+
+### Testing Required:
+
+1. Create in-progress record via form (fill contact info, advance one step)
+2. Get record ID from AirTable
+3. Open new browser window with: https://esfquote.netlify.app/?resume=recXXXX
+4. Verify form restores with correct data and step
+5. Test with invalid record ID (should show error)
+6. Test with completed record (should reject with 403)
+7. Verify URL parameter is removed after restore
+8. Test that resumed sessions continue to auto-save updates
+
+### Files Created:
+- netlify/functions/airtable-fetch.js (149 lines)
+
+### Files Modified:
+- js/app.js (replaced checkSessionRestoration/restoreSession with new implementation)
+  * Added checkResumeParameter() method
+  * Added restoreFromAirTable() method
+  * Added detectCurrentStep() method
+  * Added cleanResumeURL() method
+  * Updated showNotification() to support persistent notifications
+  * Updated constructor to call checkResumeParameter() instead of loadSavedData()
+  * Updated notification messages for better clarity
+
+### Architecture:
+
+```
+Email Link: ?resume=rec123
+    ↓
+Frontend: checkResumeParameter()
+    ↓
+Frontend: restoreFromAirTable(recordId)
+    ↓
+Serverless: airtable-fetch.js (GET)
+    ↓
+AirTable API: Fetch record
+    ↓
+Validation: status='in_progress'?
+    ↓ YES
+Frontend: Map fields to formData
+    ↓
+Frontend: detectCurrentStep()
+    ↓
+Frontend: renderStep() + show notification
+    ↓
+URL: Clean ?resume parameter
+    ↓
+User continues form from exact point
+```
+
+### Edge Cases Handled:
+
+1. Invalid record ID format → 400 error
+2. Record not found → 404 error + fallback to localStorage
+3. Record already completed → 403 error (privacy)
+4. Network failure → Error notification + fallback
+5. Missing AirTable credentials → 500 error
+6. URL has ?resume but localStorage has data → URL takes precedence
+7. Fields partially filled → Intelligent step detection
+8. Conditional steps (import/export) → Correct flow restoration
+
+### Known Limitations:
+
+1. Document uploads not restored (documents field not implemented yet - Phase 5)
+2. Step detection is approximate for middle steps (based on field presence)
+3. If user bookmarks ?resume URL, they can't reuse it after completion (403 protection)
+
+---

@@ -91,17 +91,13 @@ class EasyFreightForm {
         
         // Setup event listeners
         this.setupEventListeners();
-        
-        // Check for session restoration from URL parameters
-        // DISABLED: Requires backend API setup - uncomment when API is ready
-        // this.checkSessionRestoration();
-        
-        // Load saved data from localStorage (browser-only persistence)
-        this.loadSavedData();
-        
+
+        // Check for resume parameter from URL (AirTable session restoration)
+        this.checkResumeParameter();
+
         // Render first step
         this.renderStep();
-        
+
         // Auto-save removed
     }
     
@@ -2965,13 +2961,33 @@ Each pallet: 250 kg, Total weight: 750 kg"
         }
     }
     
+    /**
+     * Check for resume parameter in URL
+     * Resume link format: ?resume=rec123456789
+     */
+    checkResumeParameter() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const recordId = urlParams.get('resume');
+
+        if (recordId) {
+            this.isRestoringSession = true;
+            this.restoreFromAirTable(recordId);
+        } else {
+            // Fall back to localStorage if no resume parameter
+            this.loadSavedData();
+        }
+    }
+
+    /**
+     * Load saved data from localStorage (fallback when no resume parameter)
+     */
     loadSavedData() {
         try {
             const saved = localStorage.getItem('easyFreightFormData');
             if (saved) {
                 const data = JSON.parse(saved);
                 const age = Date.now() - (data.timestamp || 0);
-                
+
                 // Load if less than 24 hours old
                 if (age < 24 * 60 * 60 * 1000) {
                     this.formData = { ...this.formData, ...data };
@@ -2982,69 +2998,187 @@ Each pallet: 250 kg, Total weight: 750 kg"
             console.warn('Could not load saved form data:', e);
         }
     }
-    
-    // Session restoration from URL parameters
-    checkSessionRestoration() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const sessionId = urlParams.get('sessionId');
-        const stepId = urlParams.get('stepId');
-        
-        if (sessionId) {
-            this.isRestoringSession = true;
-            this.restoreSession(sessionId, stepId);
-        }
-    }
-    
-    async restoreSession(sessionId, stepId = null) {
+
+    /**
+     * Restore session from AirTable record
+     * @param {string} recordId - AirTable record ID (starts with 'rec')
+     */
+    async restoreFromAirTable(recordId) {
+        // Show loading indicator
+        const loadingMsg = this.showNotification('Restoring your session...', 'info', false);
+
         try {
-            // Fetch session data from API
-            const response = await fetch(`tables/form_sessions?search=${sessionId}&limit=1`);
-            
-            if (!response.ok) {
-                throw new Error('Failed to fetch session data');
-            }
-            
+            // Call serverless function to fetch record
+            const response = await fetch(`https://esfquote.netlify.app/.netlify/functions/airtable-fetch?recordId=${encodeURIComponent(recordId)}`);
+
             const result = await response.json();
-            
-            if (result.data && result.data.length > 0) {
-                const sessionData = result.data[0];
-                
-                // Parse and restore form data
-                if (sessionData.form_data) {
-                    const parsedData = JSON.parse(sessionData.form_data);
-                    this.formData = { ...this.formData, ...parsedData };
-                }
-                
-                // Store session ID for updates
-                this.sessionId = sessionData.id;
-                
-                // Restore step position
-                if (stepId) {
-                    // Find step by ID
-                    const stepIndex = this.steps.findIndex(step => step.id === stepId);
-                    if (stepIndex !== -1) {
-                        this.currentStep = stepIndex + 1;
-                    } else {
-                        // Default to saved step or current step
-                        this.currentStep = sessionData.current_step || 1;
-                    }
-                } else {
-                    this.currentStep = sessionData.current_step || 1;
-                }
-                
-                // Update session status to active
-                await this.updateSession({ status: 'active', last_activity: new Date().toISOString() });
-                
-                // Show restoration notification
-                this.showSessionRestoredNotification();
-            } else {
-                console.warn('Session not found:', sessionId);
-                this.showSessionNotFoundNotification();
+
+            // Remove loading message
+            if (loadingMsg && loadingMsg.parentNode) {
+                loadingMsg.parentNode.removeChild(loadingMsg);
             }
+
+            if (!result.success) {
+                console.warn('Failed to restore session:', result.error);
+                this.showSessionNotFoundNotification();
+                // Clean URL and load localStorage data
+                this.cleanResumeURL();
+                this.loadSavedData();
+                return;
+            }
+
+            // Map AirTable fields back to formData
+            const fields = result.fields;
+
+            // Contact Information
+            this.formData.first_name = fields.first_name || '';
+            this.formData.last_name = fields.last_name || '';
+            this.formData.email = fields.email || '';
+            this.formData.phone = fields.phone || '';
+            this.formData.company_name = fields.company_name || '';
+            this.formData.consent_checkbox = fields.consent_checkbox || false;
+
+            // Classification
+            this.formData.direction = fields.direction || '';
+            this.formData.customer_type = fields.customer_type || '';
+
+            // Import-specific
+            this.formData.goods_location = fields.goods_location || '';
+            this.formData.arrival_method = fields.arrival_method || '';
+            this.formData.arrival_timeline = fields.arrival_timeline || '';
+            this.formData.customs_code_status = fields.customs_code_status || '';
+            this.formData.customs_code_number = fields.customs_code_number || '';
+
+            // Export-specific
+            this.formData.export_service_needed = fields.export_service_needed || '';
+            this.formData.destination_country = fields.destination_country || '';
+
+            // Service Classification
+            this.formData.shipping_payment = fields.shipping_payment || '';
+            this.formData.local_delivery = fields.local_delivery || '';
+            this.formData.needs_port_delivery = fields.needs_port_delivery || '';
+            this.formData.delivery_address = fields.delivery_address || '';
+            this.formData.shipment_method = fields.shipment_method || '';
+            this.formData.container_type = fields.container_type || '';
+            this.formData.air_weight_category = fields.air_weight_category || '';
+
+            // Cargo Details
+            this.formData.cargo_type = fields.cargo_type || '';
+            this.formData.cargo_details = fields.cargo_details || '';
+            this.formData.other_cargo_description = fields.other_cargo_description || '';
+            this.formData.personal_item_condition = fields.personal_item_condition || '';
+            this.formData.personal_item_mixed = fields.personal_item_mixed || false;
+            this.formData.requires_temperature_control = fields.requires_temperature_control || false;
+
+            // Packing Information
+            this.formData.packing_info_combined = fields.packing_info_combined || '';
+
+            // Document Status (reconstruct nested object from flat fields)
+            this.formData.document_status = {
+                air_waybill: fields.air_waybill_status || '',
+                bill_of_lading: fields.bill_of_lading_status || '',
+                courier_receipt: fields.courier_receipt_status || '',
+                commercial_invoice: fields.commercial_invoice_status || '',
+                packing_list: fields.packing_list_status || '',
+                export_declaration: fields.export_declaration_status || '',
+                msds: fields.msds_status || ''
+            };
+
+            // System Fields
+            this.formData.session_id = fields.session_id || '';
+            this.formData.airtable_record_id = result.recordId; // Store record ID for future updates
+
+            // Detect which step user was on based on filled fields
+            const detectedStep = this.detectCurrentStep();
+            this.currentStep = detectedStep;
+
+            // Clean URL parameter after successful restore
+            this.cleanResumeURL();
+
+            // Show success notification
+            this.showSessionRestoredNotification();
+
+            // Re-render the correct step
+            this.renderStep();
+
         } catch (error) {
             console.error('Error restoring session:', error);
+
+            // Remove loading message
+            if (loadingMsg && loadingMsg.parentNode) {
+                loadingMsg.parentNode.removeChild(loadingMsg);
+            }
+
             this.showSessionErrorNotification();
+            this.cleanResumeURL();
+            this.loadSavedData();
         }
+    }
+
+    /**
+     * Detect current step based on filled fields
+     * Returns the step number user should be on
+     */
+    detectCurrentStep() {
+        // Step 1: Contact info - if only basic contact fields filled
+        if (!this.formData.direction) {
+            return 1;
+        }
+
+        // Step 2: Classification - if direction filled but no goods location/export service
+        if (this.formData.direction === 'import' && !this.formData.goods_location) {
+            return 2;
+        }
+        if (this.formData.direction === 'export' && !this.formData.export_service_needed) {
+            return 2;
+        }
+
+        // Step 3+: Continue based on conditional logic
+        // For imports, goods_location exists
+        if (this.formData.direction === 'import' && this.formData.goods_location) {
+            // Check arrival details
+            if (!this.formData.arrival_method && this.shouldShowArrivalDetails()) {
+                return 3; // Arrival details step
+            }
+            // Check shipping method
+            if (!this.formData.shipment_method) {
+                return 4; // Shipping method step (or later if conditional)
+            }
+        }
+
+        // For exports, check export service
+        if (this.formData.direction === 'export' && this.formData.export_service_needed) {
+            if (!this.formData.shipment_method && this.shouldShowServiceDetails()) {
+                return 3;
+            }
+        }
+
+        // Check cargo type
+        if (!this.formData.cargo_type) {
+            return 7; // Approximate cargo type step
+        }
+
+        // Check documents
+        if (!this.formData.document_status || Object.keys(this.formData.document_status).length === 0) {
+            return 8; // Document upload step
+        }
+
+        // Check customs code (imports only)
+        if (this.formData.direction === 'import' && !this.formData.customs_code_status) {
+            return 9; // Customs code step
+        }
+
+        // Default to review step if most fields are filled
+        return 10;
+    }
+
+    /**
+     * Remove resume parameter from URL without page reload
+     */
+    cleanResumeURL() {
+        const url = new URL(window.location);
+        url.searchParams.delete('resume');
+        window.history.replaceState({}, document.title, url.toString());
     }
     
     // Save form data to API table after each step
@@ -3148,18 +3282,18 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
     
     // Notification methods
     showSessionRestoredNotification() {
-        this.showNotification('Session restored! Continuing from where you left off.', 'success');
+        this.showNotification('Welcome back! Your form has been restored.', 'success');
     }
-    
+
     showSessionNotFoundNotification() {
-        this.showNotification('Session not found. Starting a new form.', 'warning');
+        this.showNotification('Unable to find your saved form. Please start a new submission.', 'warning');
     }
-    
+
     showSessionErrorNotification() {
-        this.showNotification('Error restoring session. Starting a new form.', 'error');
+        this.showNotification('Could not restore your session. Starting fresh.', 'error');
     }
     
-    showNotification(message, type = 'info') {
+    showNotification(message, type = 'info', autoDismiss = true) {
         // Create notification element
         const notification = document.createElement('div');
         notification.className = `session-notification session-notification-${type}`;
@@ -3169,18 +3303,23 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
                 <span class="session-notification-message">${message}</span>
             </div>
         `;
-        
+
         // Add to page
         document.body.appendChild(notification);
-        
+
         // Show notification
         setTimeout(() => notification.classList.add('show'), 100);
-        
-        // Remove after 5 seconds
-        setTimeout(() => {
-            notification.classList.remove('show');
-            setTimeout(() => notification.remove(), 300);
-        }, 5000);
+
+        // Auto-dismiss after 5 seconds if enabled
+        if (autoDismiss) {
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => notification.remove(), 300);
+            }, 5000);
+        }
+
+        // Return reference so caller can remove it manually
+        return notification;
     }
     
     getNotificationIcon(type) {
@@ -5753,8 +5892,8 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
                 this.formData.session_id = this.generateSessionId();
             }
 
-            // Prepare payload with in-progress status
-            const payload = this.prepareAirTablePayload();
+            // Prepare payload with in-progress status (skip quote generation for auto-save)
+            const payload = this.prepareAirTablePayload(false); // false = auto-save, don't generate quote
             payload.status = 'in_progress';
 
             // Determine if creating new record or updating existing
@@ -5824,8 +5963,8 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
                 this.formData.session_id = this.generateSessionId();
             }
 
-            // Prepare payload with completed status
-            const payload = this.prepareAirTablePayload();
+            // Prepare payload with completed status (include quote HTML for final submission)
+            const payload = this.prepareAirTablePayload(true); // true = final submit, generate quote
 
             // Determine if creating new record or updating existing
             const isUpdate = !!this.formData.airtable_record_id;
@@ -5870,13 +6009,15 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
 
     /**
      * Prepare AirTable payload from form data
+     * @param {boolean} isFinalSubmit - If true, includes quote HTML/date/reference. If false (auto-save), excludes them.
      */
-    prepareAirTablePayload() {
-        // Generate quote HTML and timestamp
-        const quoteHTML = this.captureQuoteHTML();
-        const quoteDate = new Date().toISOString();
-        
-        return {
+    prepareAirTablePayload(isFinalSubmit = true) {
+        // Only generate quote HTML for final submission, not for auto-save
+        const quoteHTML = isFinalSubmit ? this.captureQuoteHTML() : '';
+        const quoteDate = isFinalSubmit ? new Date().toISOString() : '';
+        const quoteReference = isFinalSubmit ? this.generateReferenceId() : '';
+
+        const payload = {
             // Contact Information
             first_name: this.formData.first_name,
             last_name: this.formData.last_name,
@@ -5929,10 +6070,10 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
             export_declaration_status: this.formData.document_status?.export_declaration || '',
             msds_status: this.formData.document_status?.msds || '',
 
-            // Quote Information - ADDED FOR PDF GENERATION AND EMAIL
+            // Quote Information - ONLY INCLUDED ON FINAL SUBMISSION
             quote_html: quoteHTML,
             quote_date: quoteDate,
-            quote_reference: this.generateReferenceId(),
+            quote_reference: quoteReference,
 
             // System Fields
             status: 'completed',
@@ -5941,6 +6082,8 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
             // Include record ID if updating existing record
             airtable_record_id: this.formData.airtable_record_id || ''
         };
+
+        return payload;
     }
 
     /**
