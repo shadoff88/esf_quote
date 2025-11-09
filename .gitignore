@@ -3,3 +3,4 @@ node_modules/
 .DS_Store
 *.log
 .netlify/
+# Trigger rebuild - Sun Nov  9 21:59:20 NZDT 2025
