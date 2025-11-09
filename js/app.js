@@ -854,16 +854,16 @@ class EasyFreightForm {
                         Export service type: *
                     </label>
                     <div class="radio-group">
-                        <div class="radio-card ${this.formData.export_service_needed === 'shipping_and_clearance' ? 'selected' : ''}">
-                            <input type="radio" name="export_service_needed" value="shipping_and_clearance" class="radio-input" ${this.formData.export_service_needed === 'shipping_and_clearance' ? 'checked' : ''}>
+                        <div class="radio-card ${this.formData.export_service_needed === 'full_service' ? 'selected' : ''}">
+                            <input type="radio" name="export_service_needed" value="full_service" class="radio-input" ${this.formData.export_service_needed === 'full_service' ? 'checked' : ''}>
                             <div class="radio-icon"></div>
                             <div class="radio-content">
                                 <div class="radio-title">Shipping + Clearance</div>
                                 <div class="radio-description">Arrange shipping and export documentation</div>
                             </div>
                         </div>
-                        <div class="radio-card ${this.formData.export_service_needed === 'clearance_only' ? 'selected' : ''}">
-                            <input type="radio" name="export_service_needed" value="clearance_only" class="radio-input" ${this.formData.export_service_needed === 'clearance_only' ? 'checked' : ''}>
+                        <div class="radio-card ${this.formData.export_service_needed === 'docs_only' ? 'selected' : ''}">
+                            <input type="radio" name="export_service_needed" value="docs_only" class="radio-input" ${this.formData.export_service_needed === 'docs_only' ? 'checked' : ''}>
                             <div class="radio-icon"></div>
                             <div class="radio-content">
                                 <div class="radio-title">Only Clearance</div>
@@ -3368,8 +3368,8 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
         
         if (this.formData.export_service_needed) {
             const serviceLabels = {
-                'shipping_and_clearance': 'Shipping + Export Clearance',
-                'clearance_only': 'Export Clearance Only',
+                'full_service': 'Shipping + Export Clearance',
+                'docs_only': 'Export Clearance Only',
                 'not_sure': 'Not Sure'
             };
             summary.push({ label: 'Export Service', value: serviceLabels[this.formData.export_service_needed] });
