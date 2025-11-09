@@ -2006,11 +2006,10 @@ Each pallet: 250 kg, Total weight: 750 kg"
         
         // Calculate routing and scoring
         this.calculateScoring();
-        
+
         // Save to Airtable after each step completion
-        // DISABLED: Requires backend API setup - uncomment when API is ready
-        // this.saveToAirtable();
-        
+        this.autoSaveToAirTable();
+
         // Note: Auto-routing removed - always continue to document step
         // Specialist/urgent routing happens after all info is collected
         
@@ -5742,77 +5741,77 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
      * Auto-save form progress to AirTable after each step (in-progress status)
      * Uses serverless function to keep API key secure
      */
-    // async autoSaveToAirTable() {
-    //     try {
-    //         // Only auto-save if user has provided email (minimum required field)
-    //         if (!this.formData.email) {
-    //             return;
-    //         }
+    async autoSaveToAirTable() {
+        try {
+            // Only auto-save if user has provided email (minimum required field)
+            if (!this.formData.email) {
+                return;
+            }
 
-    //         // Generate session ID if not exists
-    //         if (!this.formData.session_id) {
-    //             this.formData.session_id = this.generateSessionId();
-    //         }
+            // Generate session ID if not exists
+            if (!this.formData.session_id) {
+                this.formData.session_id = this.generateSessionId();
+            }
 
-    //         // Prepare payload with in-progress status
-    //         const payload = this.prepareAirTablePayload();
-    //         payload.status = 'in_progress';
+            // Prepare payload with in-progress status
+            const payload = this.prepareAirTablePayload();
+            payload.status = 'in_progress';
 
-    //         // Determine if creating new record or updating existing
-    //         const isUpdate = !!this.formData.airtable_record_id;
-    //         const operation = isUpdate ? 'update' : 'create';
+            // Determine if creating new record or updating existing
+            const isUpdate = !!this.formData.airtable_record_id;
+            const operation = isUpdate ? 'update' : 'create';
 
-    //         // Prepare request for serverless function
-    //         const requestBody = {
-    //             operation: operation,
-    //             recordId: this.formData.airtable_record_id || null,
-    //             fields: payload
-    //         };
+            // Prepare request for serverless function
+            const requestBody = {
+                operation: operation,
+                recordId: this.formData.airtable_record_id || null,
+                fields: payload
+            };
 
-    //         // Call serverless function
-    //         const response = await fetch('https://esfgrowin.netlify.app/.netlify/functions/airtable-submit', {
-    //             method: 'POST',
-    //             headers: {
-    //                 'Content-Type': 'application/json'
-    //             },
-    //             body: JSON.stringify(requestBody)
-    //         });
+            // Call serverless function
+            const response = await fetch('https://esfquote.netlify.app/.netlify/functions/airtable-submit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
 
-    //         const result = await response.json();
+            const result = await response.json();
 
-    //         if (result.success) {
-    //             // Store record ID for future updates
-    //             if (result.recordId && !this.formData.airtable_record_id) {
-    //                 this.formData.airtable_record_id = result.recordId;
-    //                 console.log('✅ Auto-saved to AirTable (new record):', result.recordId);
-    //             } else {
-    //                 console.log('✅ Auto-saved to AirTable (updated):', result.recordId);
-    //             }
+            if (result.success) {
+                // Store record ID for future updates
+                if (result.recordId && !this.formData.airtable_record_id) {
+                    this.formData.airtable_record_id = result.recordId;
+                    console.log('✅ Auto-saved to AirTable (new record):', result.recordId);
+                } else {
+                    console.log('✅ Auto-saved to AirTable (updated):', result.recordId);
+                }
 
-    //             // Show auto-save indicator briefly
-    //             this.showAutoSaveIndicator();
-    //         } else {
-    //             console.warn('Auto-save failed:', result.error);
-    //         }
+                // Show auto-save indicator briefly
+                this.showAutoSaveIndicator();
+            } else {
+                console.warn('Auto-save failed:', result.error);
+            }
 
-    //     } catch (error) {
-    //         // Silent fail for auto-save - don't interrupt user experience
-    //         console.log('Auto-save skipped:', error.message);
-    //     }
-    // }
+        } catch (error) {
+            // Silent fail for auto-save - don't interrupt user experience
+            console.log('Auto-save skipped:', error.message);
+        }
+    }
 
     /**
      * Show auto-save indicator briefly
      */
-    // showAutoSaveIndicator() {
-    //     const indicator = document.getElementById('autoSaveIndicator');
-    //     if (indicator) {
-    //         indicator.style.display = 'flex';
-    //         setTimeout(() => {
-    //             indicator.style.display = 'none';
-    //         }, 2000);
-    //     }
-    // }
+    showAutoSaveIndicator() {
+        const indicator = document.getElementById('autoSaveIndicator');
+        if (indicator) {
+            indicator.style.display = 'flex';
+            setTimeout(() => {
+                indicator.style.display = 'none';
+            }, 2000);
+        }
+    }
 
     /**
      * Submit form data to AirTable (final submission)

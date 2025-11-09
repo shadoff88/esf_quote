@@ -142,3 +142,35 @@ Test auto-save and final submission work correctly:
 4. Validate session restoration notifications appear correctly
 5. Test container calculator with updated JS
 6. Verify mobile responsiveness with new viewport handling
+
+---
+
+## 2025-11-09: Playwright Step 1 Auto-Save Test
+
+### Test Created:
+- test-step1-only.js - Isolated test for first step only in headless mode
+
+### Test Results:
+- Step 1 fields filled successfully with test data:
+  * First name: PlaywrightStep1
+  * Last name: TestOnly
+  * Email: playwright.step1@example.com
+  * Phone: +64211234567
+  * Consent checkbox: Checked
+- Next button clicked successfully
+- Form transitioned from Step 1 to Step 2
+- Auto-save indicator became visible
+- No console errors detected
+- No network errors detected
+- Status: SUCCESS
+
+### Justification:
+Created focused test to verify Step 1 auto-save functionality works correctly before testing full form flow. Headless mode enables CI/CD integration and faster test execution.
+
+### Screenshots Generated:
+- screenshots/step1-0-initial.png (form loaded)
+- screenshots/step1-1-filled.png (data entered)
+- screenshots/step1-2-after-next.png (transitioned to Step 2)
+
+### Note:
+Auto-save to AirTable happens asynchronously in background. Test confirms form advancement works correctly and auto-save indicator displays. AirTable record verification would require separate API check.
