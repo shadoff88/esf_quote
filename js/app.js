@@ -3589,7 +3589,7 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
         return descriptions[this.formData.routing_decision] || 'Standard processing timeline applies';
     }
     
-    submitForm() {
+    async submitForm() {
         this.showLoadingScreen();
         
         // Mark session as completed
@@ -3601,12 +3601,30 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
             });
         }
         
-        // Simulate processing
-        this.simulateProcessing().then(() => {
+        try {
+            // Simulate processing with visual feedback
+            await this.simulateProcessing();
+            
+            // Submit to Airtable with quote HTML
+            const submissionResult = await this.submitToAirTable();
+            
+            if (!submissionResult.success) {
+                throw new Error(submissionResult.error || 'Submission failed');
+            }
+            
+            // Store record ID for potential updates
+            this.formData.airtable_record_id = submissionResult.recordId;
+            
+            // Show success screen
             this.hideLoadingScreen();
             this.showResults();
             this.clearSavedData();
-        });
+            
+        } catch (error) {
+            console.error('Form submission error:', error);
+            this.hideLoadingScreen();
+            this.showSubmissionError(error.message);
+        }
     }
     
     simulateProcessing() {
@@ -3615,7 +3633,8 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
                 { id: 'step1', delay: 800, text: 'Validating information...' },
                 { id: 'step2', delay: 1200, text: 'Calculating complexity score...' },
                 { id: 'step3', delay: 1000, text: 'Routing to appropriate specialist...' },
-                { id: 'step4', delay: 1500, text: 'Preparing your personalised response...' }
+                { id: 'step4', delay: 800, text: 'Preparing your quote...' },
+                { id: 'step4', delay: 1000, text: 'Submitting to Airtable...' }
             ];
             
             let currentStep = 0;
@@ -5861,6 +5880,10 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
      * Prepare AirTable payload from form data
      */
     prepareAirTablePayload() {
+        // Generate quote HTML and timestamp
+        const quoteHTML = this.captureQuoteHTML();
+        const quoteDate = new Date().toISOString();
+        
         return {
             // Contact Information
             first_name: this.formData.first_name,
@@ -5914,6 +5937,11 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
             export_declaration_status: this.formData.document_status?.export_declaration || '',
             msds_status: this.formData.document_status?.msds || '',
 
+            // Quote Information - ADDED FOR PDF GENERATION AND EMAIL
+            quote_html: quoteHTML,
+            quote_date: quoteDate,
+            quote_reference: this.generateReferenceId(),
+
             // System Fields
             status: 'completed',
             session_id: this.formData.session_id || this.generateSessionId(),
@@ -5930,6 +5958,201 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
         const timestamp = Date.now();
         const random = Math.random().toString(36).substring(2, 15);
         return `session_${timestamp}_${random}`;
+    }
+
+    /**
+     * Capture complete quote HTML as displayed to client
+     * This captures the exact pricing breakdown that the client sees on screen
+     * Used for PDF generation and email evidence trail
+     */
+    captureQuoteHTML() {
+        const timestamp = new Date().toLocaleString('en-NZ', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        });
+        
+        const pricing = this.calculatePricingEstimate();
+        const routing = this.formData.routing_decision;
+        const routingConfig = this.getRoutingConfig(routing);
+        const referenceId = this.generateReferenceId();
+        
+        // Build comprehensive quote HTML
+        let quoteHTML = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Easy Freight Quote - ${referenceId}</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #1e40af, #3b82f6); color: white; padding: 30px; border-radius: 8px; margin-bottom: 30px; }
+        .header h1 { margin: 0 0 10px 0; font-size: 28px; }
+        .header p { margin: 5px 0; opacity: 0.95; }
+        .section { background: #f8f9fa; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        .section h2 { color: #1e40af; margin-top: 0; font-size: 20px; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; }
+        .pricing-table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+        .pricing-table th, .pricing-table td { padding: 12px; text-align: left; border-bottom: 1px solid #dee2e6; }
+        .pricing-table th { background: #e3f2fd; color: #1e40af; font-weight: 600; }
+        .pricing-table .total-row { background: #fff3cd; font-weight: 700; font-size: 18px; }
+        .pricing-table .subtotal-row { background: #f8f9fa; font-weight: 600; }
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .info-item { padding: 10px; background: white; border-radius: 4px; }
+        .info-item strong { display: block; color: #1e40af; margin-bottom: 5px; }
+        .note { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; border-radius: 4px; margin: 15px 0; }
+        .footer { text-align: center; color: #6c757d; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Easy Freight Customs Clearance Quote</h1>
+        <p><strong>Reference:</strong> ${referenceId}</p>
+        <p><strong>Quote Date:</strong> ${timestamp}</p>
+        <p><strong>Status:</strong> ${routingConfig.title}</p>
+    </div>
+
+    <div class="section">
+        <h2>Client Information</h2>
+        <div class="info-grid">
+            <div class="info-item">
+                <strong>Name</strong>
+                ${this.formData.first_name} ${this.formData.last_name}
+            </div>
+            ${this.formData.company_name ? `
+            <div class="info-item">
+                <strong>Company</strong>
+                ${this.formData.company_name}
+            </div>` : ''}
+            <div class="info-item">
+                <strong>Email</strong>
+                ${this.formData.email}
+            </div>
+            <div class="info-item">
+                <strong>Phone</strong>
+                ${this.formData.phone}
+            </div>
+        </div>
+    </div>
+
+    ${this.shouldShowPricing() ? `
+    <div class="section">
+        <h2>Easy Freight Service Fees</h2>
+        <table class="pricing-table">
+            <thead>
+                <tr>
+                    <th>Service Description</th>
+                    <th style="text-align: right;">Amount (NZD)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Customs Clearance (Base)*</td>
+                    <td style="text-align: right;"><strong>$197.00</strong></td>
+                </tr>
+                ${pricing.customsCodeFee > 0 ? `
+                <tr>
+                    <td>Customs Client Code Application</td>
+                    <td style="text-align: right;"><strong>$95.00</strong></td>
+                </tr>` : ''}
+                ${pricing.specialHandlingFee > 0 ? `
+                <tr>
+                    <td>BIO Security</td>
+                    <td style="text-align: right;"><strong>$67.00</strong></td>
+                </tr>` : ''}
+                <tr class="subtotal-row">
+                    <td><strong>Service Total (excl. GST)</strong></td>
+                    <td style="text-align: right;"><strong>$${pricing.serviceTotal.toFixed(2)}</strong></td>
+                </tr>
+                <tr>
+                    <td>GST (15%)</td>
+                    <td style="text-align: right;"><strong>$${pricing.gstOnServices.toFixed(2)}</strong></td>
+                </tr>
+                <tr class="total-row">
+                    <td><strong>Total Service Fee</strong></td>
+                    <td style="text-align: right;"><strong>$${pricing.totalServiceFee.toFixed(2)}</strong></td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="note">
+            <p style="margin: 0; font-size: 14px;">
+                *Our rate includes the classification of 5 invoice lines. Each additional line costs NZD 5 + GST per line.
+            </p>
+        </div>
+
+        <h2 style="margin-top: 30px;">Government Fees (Payable at Clearance)</h2>
+        <table class="pricing-table">
+            <tbody>
+                <tr>
+                    <td>Customs Transaction Fee (CTF)</td>
+                    <td style="text-align: right;">NZD $106.80</td>
+                </tr>
+                <tr>
+                    <td>Import Duty</td>
+                    <td style="text-align: right;">Variable*</td>
+                </tr>
+                <tr>
+                    <td>GST on Goods (15%)</td>
+                    <td style="text-align: right;">Variable*</td>
+                </tr>
+                ${this.formData.cargo_type === 'food_beverages' ? `
+                <tr>
+                    <td>MPI Biosecurity Fees</td>
+                    <td style="text-align: right;">Variable*</td>
+                </tr>` : ''}
+            </tbody>
+        </table>
+        <div class="note">
+            <p style="margin: 0; font-size: 14px;">
+                *Government fees depend on goods classification, origin country, and declared value
+            </p>
+        </div>
+    </div>
+    ` : `
+    <div class="section">
+        <h2>Quote Estimation</h2>
+        <p>Based on your shipment details, we'll provide a personalised quote after reviewing your information. 
+        Our specialist will contact you with accurate pricing tailored to your specific needs.</p>
+    </div>
+    `}
+
+    <div class="section">
+        <h2>Shipment Details</h2>
+        <div class="info-grid">
+            <div class="info-item">
+                <strong>Service Type</strong>
+                ${this.formData.direction === 'import' ? 'Import to NZ' : 'Export from NZ'}
+            </div>
+            <div class="info-item">
+                <strong>Customer Type</strong>
+                ${this.formData.customer_type === 'business' ? 'Business' : 'Personal'}
+            </div>
+            ${this.formData.cargo_type ? `
+            <div class="info-item">
+                <strong>Cargo Type</strong>
+                ${this.getCargoTypeDisplayText(this.formData.cargo_type)}
+            </div>` : ''}
+            ${this.formData.shipment_method ? `
+            <div class="info-item">
+                <strong>Shipping Method</strong>
+                ${this.getShipmentMethodDisplayText(this.formData.shipment_method)}
+            </div>` : ''}
+        </div>
+    </div>
+
+    <div class="footer">
+        <p><strong>Easy Freight Customs Brokers</strong></p>
+        <p>This quote is valid for 30 days from the date of issue.</p>
+        <p>All pricing includes GST unless otherwise stated.</p>
+    </div>
+</body>
+</html>
+        `;
+        
+        return quoteHTML.trim();
     }
 
     /**
