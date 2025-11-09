@@ -95,9 +95,20 @@ exports.handler = async (event, context) => {
             // Skip internal fields that shouldn't be sent to AirTable
             if (key === 'airtable_record_id') continue;
 
+            // Fix double-encoded JSON strings (defensive coding)
+            let cleanValue = value;
+            if (typeof value === 'string' && value.startsWith('"') && value.endsWith('"')) {
+                try {
+                    cleanValue = JSON.parse(value);
+                } catch (e) {
+                    // If parse fails, use original value
+                    cleanValue = value;
+                }
+            }
+
             // Include boolean values and non-empty strings
-            if (typeof value === 'boolean' || (value !== '' && value !== undefined && value !== null)) {
-                cleanedFields[key] = value;
+            if (typeof cleanValue === 'boolean' || (cleanValue !== '' && cleanValue !== undefined && cleanValue !== null)) {
+                cleanedFields[key] = cleanValue;
             }
         }
 
