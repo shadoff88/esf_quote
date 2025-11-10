@@ -11,7 +11,7 @@
 
 **Project Type:** Static HTML/CSS/JavaScript application with serverless backend integration
 
-**Last Updated:** 9th November 2025 (v20251109e)
+**Last Updated:** 10th November 2025 (v20251110c)
 
 ---
 
@@ -44,7 +44,8 @@
 - **Auto-Save Integration** - Incremental saves after each step completion ✨ NEW
 - **Airtable Submission** - All form data saved to AirTable database
 - **Quote HTML Storage** - Complete pricing breakdown stored in Airtable
-- **Email Automation Ready** - Quote HTML ready for Airtable → Email automation
+- **Broker Email Summary** - HTML-formatted submission data for email notifications ✨ NEW
+- **Email Automation Ready** - Quote HTML + submission summary ready for Airtable → Email automation
 - **Evidence Trail** - What client sees = what broker sees (dispute elimination)
 - **Defensive Data Cleaning** - Handles double-encoded JSON values automatically ✨ NEW
 
@@ -59,7 +60,7 @@ APP/
 │   ├── style.css                       # Main styles (31 KB)
 │   └── container-calculator.css        # Calculator modal styles (11 KB)
 ├── js/
-│   ├── app.js                          # Core form logic (280 KB) ✨ UPDATED
+│   ├── app.js                          # Core form logic (293 KB) ✨ UPDATED
 │   └── container-calculator.js         # Container calculator (32 KB)
 ├── netlify/
 │   └── functions/
@@ -247,6 +248,14 @@ AIRTABLE_BASE_ID=your_airtable_base_id_here
 - `quote_reference` (Single line text) - Unique quote reference ID
 - `estimated_value` (Number) - Estimated shipment value ✨ NEW
 
+**Broker Email Fields:**
+- `submission_data` (Long text / Rich text) - HTML-formatted summary of all form data ✨ NEW
+  - Updated on every auto-save (in-progress) and final submission
+  - Includes all collected data: client info, shipment details, cargo info, delivery requirements
+  - Shows quote breakdown ONLY on final submission (status='completed')
+  - Purpose: Broker can see everything needed directly in email notification
+  - Format: HTML with `<h3>`, `<p>`, `<strong>`, `<br>` tags for email compatibility
+
 **System Fields:**
 - `status` (Single select: **in_progress/completed/abandoned**) ✨ UPDATED
 - `session_id` (Single line text)
@@ -305,10 +314,58 @@ netlify dev
 
 ---
 
-## 🔄 Recent Changes (November 9, 2025)
+## 🔄 Recent Changes
+
+### Version 20251110c - Broker Email Summary Field
+**Status:** ✅ DEPLOYED  
+**Date:** 10th November 2025
+
+**Feature: Submission Data for Broker Emails**
+- Added `generateSubmissionSummary(isFinalSubmit)` method (157 lines)
+- New `submission_data` field in AirTable payload
+- HTML-formatted summary of all form data for email notifications
+- Progressive data capture: updates on every auto-save and final submission
+
+**What's Included:**
+- ✅ Client Information (name, company, email, phone)
+- ✅ Service Type (import/export, business/personal)
+- ✅ Timing & Urgency (goods location, arrival timeline)
+- ✅ Shipment Details (method, container type, payment terms)
+- ✅ Cargo Information (type, description, special requirements)
+- ✅ Customs Code (status and number if available)
+- ✅ Delivery Requirements (port delivery, address)
+- ✅ Packing Information
+- ✅ Document Status Summary
+- ✅ Quote Estimate (ONLY on final submission when status='completed')
+- ✅ Routing Decision (urgent/standard/specialist/education)
+- ✅ Status (in-progress vs completed)
+
+**Benefits:**
+- ✅ Brokers see all critical info directly in email
+- ✅ No need to open AirTable for basic triage
+- ✅ Quote amount visible immediately (when completed)
+- ✅ Priority level clear (routing decision)
+- ✅ Faster response times
+- ✅ Better client service
+
+**Example Output (Final Submission):**
+```
+📋 Submission Summary
+Client: John Smith (ABC Imports Ltd)
+Email: john@example.com
+Service: Import to NZ (Business)
+Shipment: Sea Freight - FCL, CIF/DDU
+Cargo: General Goods - Industrial machinery
+Quote: Base $197 + Code $95 = Total $335.80 (incl GST)
+Routing: STANDARD
+Status: ✅ Completed
+```
+
+---
 
 ### Version 20251109e - Field Value Alignment
-**Status:** ✅ DEPLOYED
+**Status:** ✅ DEPLOYED  
+**Date:** 9th November 2025
 
 **Changes:**
 - Fixed `export_service_needed` field value mismatch
