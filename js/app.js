@@ -6075,6 +6075,11 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
             quote_date: quoteDate,
             quote_reference: quoteReference,
 
+            // Submission Summary - HTML formatted for broker email
+            // Updated on every auto-save (in-progress) and final submission
+            // Includes quote ONLY on final submission when isFinalSubmit=true
+            submission_data: this.generateSubmissionSummary(isFinalSubmit),
+
             // System Fields
             status: 'completed',
             session_id: this.formData.session_id || this.generateSessionId(),
@@ -6288,6 +6293,158 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
         `;
         
         return quoteHTML.trim();
+    }
+
+    /**
+     * Generate submission summary for broker email
+     * Formatted as HTML rich text for easy reading in email notifications
+     * @param {boolean} isFinalSubmit - Whether this is the final submission (includes quote)
+     * @returns {string} HTML formatted summary of submission
+     */
+    generateSubmissionSummary(isFinalSubmit = false) {
+        const routing = this.formData.routing_decision || 'standard';
+        const routingConfig = this.getRoutingConfig(routing);
+        
+        let html = '<h3>📋 Submission Summary</h3>\n\n';
+        
+        // Client Information
+        html += '<p><strong>Client Information:</strong><br>\n';
+        html += `Name: ${this.formData.first_name} ${this.formData.last_name}<br>\n`;
+        if (this.formData.company_name) {
+            html += `Company: ${this.formData.company_name}<br>\n`;
+        }
+        html += `Email: ${this.formData.email}<br>\n`;
+        html += `Phone: ${this.formData.phone}</p>\n\n`;
+        
+        // Service Classification
+        html += '<p><strong>Service Type:</strong><br>\n';
+        html += `Direction: ${this.formData.direction === 'import' ? 'Import to NZ' : 'Export from NZ'}<br>\n`;
+        html += `Customer Type: ${this.formData.customer_type === 'business' ? 'Business' : 'Personal'}</p>\n\n`;
+        
+        // Import-specific details
+        if (this.formData.direction === 'import' && this.formData.goods_location) {
+            html += '<p><strong>Timing & Urgency:</strong><br>\n';
+            html += `Goods Location: ${this.getLocationDisplayText(this.formData.goods_location)}<br>\n`;
+            if (this.formData.arrival_timeline) {
+                html += `Arrival Timeline: ${this.formData.arrival_timeline}</p>\n\n`;
+            } else {
+                html += '</p>\n\n';
+            }
+        }
+        
+        // Shipment Details
+        if (this.formData.shipment_method || this.formData.shipping_payment) {
+            html += '<p><strong>Shipment Details:</strong><br>\n';
+            if (this.formData.shipment_method) {
+                html += `Shipping Method: ${this.getShipmentMethodDisplayText(this.formData.shipment_method)}<br>\n`;
+            }
+            if (this.formData.container_type) {
+                const containerLabels = {
+                    'lcl': 'LCL (Less than Container Load)',
+                    'fcl': 'FCL (Full Container Load)'
+                };
+                html += `Container Type: ${containerLabels[this.formData.container_type] || this.formData.container_type}<br>\n`;
+            }
+            if (this.formData.air_weight_category) {
+                const weightLabels = {
+                    'under_100kg': 'Under 100kg',
+                    'over_100kg': 'Over 100kg'
+                };
+                html += `Air Freight Weight: ${weightLabels[this.formData.air_weight_category] || this.formData.air_weight_category}<br>\n`;
+            }
+            if (this.formData.shipping_payment) {
+                html += `Payment Terms: ${this.getPaymentTermsDisplayText(this.formData.shipping_payment)}<br>\n`;
+            }
+            html += '</p>\n\n';
+        }
+        
+        // Cargo Information
+        if (this.formData.cargo_type) {
+            html += '<p><strong>Cargo Information:</strong><br>\n';
+            html += `Type: ${this.getCargoTypeDisplayText(this.formData.cargo_type)}<br>\n`;
+            
+            if (this.formData.cargo_details) {
+                html += `Details: ${this.formData.cargo_details}<br>\n`;
+            }
+            if (this.formData.other_cargo_description) {
+                html += `Description: ${this.formData.other_cargo_description}<br>\n`;
+            }
+            if (this.formData.personal_item_condition) {
+                html += `Condition: ${this.formData.personal_item_condition === 'used' ? 'Used' : 'New'}<br>\n`;
+            }
+            if (this.formData.requires_temperature_control) {
+                html += `Temperature Control: Required<br>\n`;
+            }
+            html += '</p>\n\n';
+        }
+        
+        // Customs Code
+        if (this.formData.customs_code_status) {
+            html += '<p><strong>Customs Code:</strong><br>\n';
+            if (this.formData.customs_code_status === 'have_code' && this.formData.customs_code_number) {
+                html += `Status: Have code - ${this.formData.customs_code_number}</p>\n\n`;
+            } else if (this.formData.customs_code_status === 'need_help') {
+                html += `Status: Need help getting a Customs Client Code</p>\n\n`;
+            } else {
+                html += `Status: ${this.formData.customs_code_status}</p>\n\n`;
+            }
+        }
+        
+        // Delivery Requirements
+        if (this.formData.needs_port_delivery) {
+            html += '<p><strong>Delivery:</strong><br>\n';
+            const isExport = this.formData.direction === 'export';
+            const deliveryLabel = isExport ? 'Collection Service' : 'Port Delivery';
+            html += `${deliveryLabel}: ${this.formData.needs_port_delivery === 'yes' ? 'Required' : 'Not Required'}<br>\n`;
+            if (this.formData.needs_port_delivery === 'yes' && this.formData.delivery_address) {
+                html += `Address: ${this.formData.delivery_address}<br>\n`;
+            }
+            html += '</p>\n\n';
+        }
+        
+        // Packing Information
+        if (this.formData.packing_info_combined) {
+            html += '<p><strong>Packing Information:</strong><br>\n';
+            html += `${this.formData.packing_info_combined.replace(/\n/g, '<br>\n')}</p>\n\n`;
+        }
+        
+        // Document Status Summary
+        if (this.formData.document_status && Object.keys(this.formData.document_status).length > 0) {
+            html += '<p><strong>Documents:</strong><br>\n';
+            const docSummary = this.generateDocumentSummary();
+            docSummary.forEach(doc => {
+                html += `${doc.title}: ${doc.status}<br>\n`;
+            });
+            html += '</p>\n\n';
+        }
+        
+        // Quote Estimate - ONLY on final submission
+        if (isFinalSubmit && this.shouldShowPricing()) {
+            const pricing = this.calculatePricingEstimate();
+            html += '<p><strong>💰 Quote Estimate:</strong><br>\n';
+            html += `Base Clearance: NZD $197.00<br>\n`;
+            if (pricing.customsCodeFee > 0) {
+                html += `Customs Code Fee: NZD $${pricing.customsCodeFee.toFixed(2)}<br>\n`;
+            }
+            if (pricing.specialHandlingFee > 0) {
+                html += `BIO Security: NZD $${pricing.specialHandlingFee.toFixed(2)}<br>\n`;
+            }
+            html += `-------------------<br>\n`;
+            html += `Subtotal (excl. GST): NZD $${pricing.serviceTotal.toFixed(2)}<br>\n`;
+            html += `GST (15%): NZD $${pricing.gstOnServices.toFixed(2)}<br>\n`;
+            html += `-------------------<br>\n`;
+            html += `<strong>TOTAL: NZD $${pricing.totalServiceFee.toFixed(2)}</strong></p>\n\n`;
+        }
+        
+        // Routing Decision
+        html += '<p><strong>Routing:</strong><br>\n';
+        html += `${routingConfig.title}</p>\n\n`;
+        
+        // Status
+        html += '<p><strong>Status:</strong><br>\n';
+        html += `${isFinalSubmit ? '✅ Completed - Ready for Processing' : '⏳ In Progress - Awaiting Completion'}</p>\n`;
+        
+        return html;
     }
 
     /**
