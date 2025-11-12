@@ -11,7 +11,7 @@
 
 **Project Type:** Static HTML/CSS/JavaScript application with serverless backend integration
 
-**Last Updated:** 12th November 2025 (v20251112a)
+**Last Updated:** 12th November 2025 (v20251112b)
 
 ---
 
@@ -30,6 +30,8 @@
   - Files stored in browser memory only (not in Airtable)
   - PDF, JPG, PNG formats supported
   - Security badge showing SSL/TLS 256-bit encryption ✨ NEW
+  - Loading indicator during file processing (base64 conversion) ✨ NEW
+  - Prevents confusion from 2-5 second delays on large files
 - **Google Places Autocomplete** - NZ address validation for delivery locations
 - **Container Calculator** - Modal calculator for container space estimation
 
@@ -391,6 +393,62 @@ netlify dev
 - ✅ Added API key whitespace trimming
 - ✅ Enhanced error logging for debugging
 - ✅ Email integration now fully functional
+
+---
+
+### Version 20251112b - Loading Indicators for File Processing
+**Status:** ✅ DEPLOYED  
+**Date:** 12th November 2025
+
+**Feature: Visual Feedback During Async Operations**
+
+**Problem Solved:**
+- Large files (3-5MB) caused 2-5 second delays during base64 conversion
+- Users confused by lack of feedback, clicked submit multiple times
+- No indication that file processing was occurring
+- Form appeared frozen during submission
+
+**Loading Indicators Added:**
+
+**1. Submit Button Loading State:**
+- ✅ Button disabled during submission (prevents double-clicks)
+- ✅ Spinner icon + "Processing..." text
+- ✅ Reduced opacity (0.8) for visual feedback
+- ✅ Cursor changes to 'wait' state
+- ✅ Restores original state on error
+- ✅ Never re-enables on success (form clears)
+
+**2. File Upload Loading Indicator:**
+```
+┌─────────────────────────────────────────────────┐
+│  🔄  Processing invoice.pdf                    │
+│      Converting to secure format...            │
+└─────────────────────────────────────────────────┘
+```
+- ✅ Appears immediately when file selected
+- ✅ Blue dashed border with pulse animation
+- ✅ Shows file name being processed
+- ✅ Clear status message
+- ✅ Automatically removed when complete
+
+**3. CSS Pulse Animation:**
+- Smooth opacity transition (1.0 → 0.6 → 1.0)
+- 1.5 second duration, infinite loop
+- Applied to loading containers
+- Professional visual feedback
+
+**UX Benefits:**
+- ✅ Eliminates user confusion during processing
+- ✅ Prevents double-submission errors
+- ✅ Clear visual feedback for all async operations
+- ✅ Professional loading states
+- ✅ Graceful error handling
+
+**Technical Implementation:**
+- Modified: `submitForm()` method (button state management)
+- Modified: `addFile()` method (file processing indicator)
+- Added: CSS `@keyframes pulse` animation
+- No external dependencies (uses existing FontAwesome icons)
 
 ---
 
