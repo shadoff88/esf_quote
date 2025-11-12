@@ -1258,6 +1258,30 @@ class EasyFreightForm {
                     <p class="step-description">Upload required shipping and commercial documents</p>
                 </div>
                 
+                <!-- Security Badge -->
+                <div style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); padding: 1rem 1.25rem; border-radius: 0.75rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); flex-wrap: wrap;">
+                    <div style="background: rgba(255, 255, 255, 0.2); padding: 0.75rem; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; min-width: 3rem;">
+                        <i class="fas fa-shield-alt" style="font-size: 1.5rem; color: #ffffff;"></i>
+                    </div>
+                    <div style="flex: 1; min-width: 200px;">
+                        <div style="color: #ffffff; font-weight: 600; font-size: 0.95rem; margin-bottom: 0.25rem; display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                            <i class="fas fa-lock"></i>
+                            <span>Secure & Encrypted Upload</span>
+                        </div>
+                        <div style="color: rgba(255, 255, 255, 0.9); font-size: 0.8rem; line-height: 1.4;">
+                            Your documents are encrypted during transmission and stored securely. Maximum 5MB per file, 5 files total.
+                        </div>
+                    </div>
+                    <div style="background: rgba(255, 255, 255, 0.2); padding: 0.5rem 1rem; border-radius: 0.5rem; min-width: 80px;">
+                        <div style="color: #ffffff; font-size: 0.75rem; font-weight: 500; text-align: center; white-space: nowrap;">
+                            SSL/TLS
+                        </div>
+                        <div style="color: rgba(255, 255, 255, 0.8); font-size: 0.65rem; text-align: center; white-space: nowrap;">
+                            256-bit
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="question">
                     <label class="question-label">
                         Required Documents
