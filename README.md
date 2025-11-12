@@ -381,6 +381,16 @@ netlify dev
 **Environment Variables Required:**
 - `MANDRILL_API` - Mandrill API key (configured in Netlify)
 
+**Bugfix (12th November 2025):**
+- 🐛 Fixed Mandrill API endpoint: Added `.json` extension to URL
+  - Wrong: `https://mandrillapp.com/api/1.0/messages/send`
+  - Correct: `https://mandrillapp.com/api/1.0/messages/send.json`
+  - Issue: API was rejecting requests with "Invalid API key" error
+  - Root cause: Mandrill requires output-format extension on all endpoints
+- ✅ Added API key whitespace trimming
+- ✅ Enhanced error logging for debugging
+- ✅ Email integration now fully functional
+
 ---
 
 ### Version 20251110c - Broker Email Summary Field
