@@ -47,7 +47,7 @@ exports.handler = async (event, context) => {
         }
 
         // Get Mandrill API key from environment variables
-        const MANDRILL_API_KEY = process.env.MANDRILL_API;
+        const MANDRILL_API_KEY = process.env.MANDRILL_API?.trim(); // Trim whitespace
 
         if (!MANDRILL_API_KEY) {
             console.error('Missing MANDRILL_API environment variable');
@@ -60,6 +60,11 @@ exports.handler = async (event, context) => {
                 })
             };
         }
+
+        // Debug log (will appear in Netlify function logs)
+        console.log('API key length:', MANDRILL_API_KEY.length);
+        console.log('API key starts with:', MANDRILL_API_KEY.substring(0, 6));
+        console.log('API key ends with:', MANDRILL_API_KEY.substring(MANDRILL_API_KEY.length - 4));
 
         // Prepare Mandrill message
         const mandrillPayload = {
@@ -89,7 +94,7 @@ exports.handler = async (event, context) => {
         console.log(`📧 Sending email to documents@easyfreight.co.nz with ${attachments?.length || 0} attachment(s)`);
 
         // Send via Mandrill API
-        const mandrillResponse = await fetch('https://mandrillapp.com/api/1.0/messages/send', {
+        const mandrillResponse = await fetch('https://mandrillapp.com/api/1.0/messages/send.json', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -99,6 +104,9 @@ exports.handler = async (event, context) => {
 
         const mandrillResult = await mandrillResponse.json();
 
+        // Debug: Log full Mandrill response
+        console.log('Mandrill API response:', JSON.stringify(mandrillResult, null, 2));
+
         // Check for Mandrill API errors
         if (mandrillResult.status === 'error') {
             console.error('Mandrill API error:', mandrillResult);
@@ -107,7 +115,8 @@ exports.handler = async (event, context) => {
                 headers,
                 body: JSON.stringify({
                     success: false,
-                    error: mandrillResult.message || 'Mandrill API error'
+                    error: mandrillResult.message || 'Mandrill API error',
+                    details: mandrillResult // Include full error details for debugging
                 })
             };
         }
