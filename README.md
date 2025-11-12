@@ -11,7 +11,7 @@
 
 **Project Type:** Static HTML/CSS/JavaScript application with serverless backend integration
 
-**Last Updated:** 10th November 2025 (v20251110c)
+**Last Updated:** 10th November 2025 (v20251110d)
 
 ---
 
@@ -24,7 +24,11 @@
 - **Session Persistence** - Zero data loss with localStorage backup
 - **Responsive Design** - Mobile-optimised with TailwindCSS
 - **Smart Routing Logic** - Automatically routes to urgent/standard/specialist/education pathways
-- **Document Upload Interface** - Track document status (uploaded/not available)
+- **File Upload with Base64** - Convert files to base64 for email attachments ✨ NEW
+  - 5MB maximum per file (changed from 20MB)
+  - 5 files maximum total (25MB combined)
+  - Files stored in browser memory only (not in Airtable)
+  - PDF, JPG, PNG formats supported
 - **Google Places Autocomplete** - NZ address validation for delivery locations
 - **Container Calculator** - Modal calculator for container space estimation
 
@@ -45,7 +49,12 @@
 - **Airtable Submission** - All form data saved to AirTable database
 - **Quote HTML Storage** - Complete pricing breakdown stored in Airtable
 - **Broker Email Summary** - HTML-formatted submission data for email notifications ✨ NEW
-- **Email Automation Ready** - Quote HTML + submission summary ready for Airtable → Email automation
+- **Mandrill Email Integration** - Automatic email with attachments on submission ✨ NEW
+  - Sends to documents@easyfreight.co.nz
+  - Includes submission summary (HTML)
+  - Attaches all uploaded files (base64)
+  - From: contact_form@easyfreight.co.nz
+  - Non-blocking (doesn't prevent success if email fails)
 - **Evidence Trail** - What client sees = what broker sees (dispute elimination)
 - **Defensive Data Cleaning** - Handles double-encoded JSON values automatically ✨ NEW
 
@@ -64,7 +73,9 @@ APP/
 │   └── container-calculator.js         # Container calculator (32 KB)
 ├── netlify/
 │   └── functions/
-│       └── airtable-submit.js          # Serverless Airtable submission (6.5 KB) ✨ UPDATED
+│       ├── airtable-fetch.js           # Serverless record fetch for resume (4.7 KB)
+│       ├── airtable-submit.js          # Serverless Airtable submission (6.5 KB)
+│       └── send-documents-email.js     # Mandrill email with attachments (5.6 KB) ✨ NEW
 ├── .git/                               # Git repository
 ├── .gitignore                          # Git ignore rules
 ├── netlify.toml                        # Netlify configuration
@@ -86,7 +97,11 @@ APP/
 ### Backend Stack
 - **Netlify Serverless Functions** - Node.js backend
 - **Airtable API** - Form submission storage
+- **Mandrill API** - Transactional email service (MailChimp)
 - **Environment Variables** - Secure API key management
+  - `AIRTABLE_API_KEY` - Airtable authentication
+  - `AIRTABLE_BASE_ID` - Database identifier
+  - `MANDRILL_API` - Mandrill authentication ✨ NEW
 
 ### Data Flow
 ```
@@ -180,6 +195,7 @@ Required environment variables for production deployment:
 ```bash
 AIRTABLE_API_KEY=your_airtable_api_key_here
 AIRTABLE_BASE_ID=your_airtable_base_id_here
+MANDRILL_API=your_mandrill_api_key_here  # NEW - Required for email integration
 ```
 
 **Configuration in Netlify:**
@@ -315,6 +331,57 @@ netlify dev
 ---
 
 ## 🔄 Recent Changes
+
+### Version 20251110d - File Upload & Mandrill Email Integration
+**Status:** ✅ DEPLOYED  
+**Date:** 10th November 2025
+
+**Feature: Real File Upload with Base64 + Email Attachments**
+
+**File Upload Enhancements:**
+- ✅ Changed file size limit: 20MB → 5MB per file
+- ✅ Added maximum 5 files total (25MB combined)
+- ✅ Implemented base64 conversion using FileReader API
+- ✅ Files stored in browser memory only (not sent to Airtable)
+- ✅ Real file content captured (not just metadata)
+
+**Mandrill Email Integration:**
+- ✅ Created `send-documents-email.js` Netlify function (5.6 KB)
+- ✅ Automatic email on final submission to documents@easyfreight.co.nz
+- ✅ Email includes HTML-formatted submission summary
+- ✅ All uploaded files attached as base64
+- ✅ From address: contact_form@easyfreight.co.nz
+- ✅ Non-blocking implementation (email failure doesn't break submission)
+
+**Technical Details:**
+```javascript
+// File validation
+- Max size: 5MB per file
+- Max count: 5 files total
+- Formats: PDF, JPG, PNG only
+- Total: ~18.75MB after base64 encoding (within Mandrill 25MB limit)
+
+// Email payload
+{
+  from: 'contact_form@easyfreight.co.nz',
+  to: 'documents@easyfreight.co.nz',
+  subject: 'New Quote - {name} - {reference}',
+  html: submission_data field,
+  attachments: [{type, name, content (base64)}]
+}
+```
+
+**Benefits:**
+- ✅ Broker receives files immediately in email
+- ✅ No separate file download from Airtable needed
+- ✅ Complete submission package in one email
+- ✅ Fast Airtable saves (no large file payloads)
+- ✅ Reliable delivery via Mandrill infrastructure
+
+**Environment Variables Required:**
+- `MANDRILL_API` - Mandrill API key (configured in Netlify)
+
+---
 
 ### Version 20251110c - Broker Email Summary Field
 **Status:** ✅ DEPLOYED  

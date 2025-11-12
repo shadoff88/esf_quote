@@ -3360,11 +3360,25 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
     }
     
     validateFile(file) {
-        const maxSize = 20 * 1024 * 1024; // 20MB
+        const maxSize = 5 * 1024 * 1024; // 5MB (changed from 20MB)
+        const maxFiles = 5; // Maximum 5 files total
         const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
         
+        // Check total files count across all document types
+        let totalFiles = 0;
+        for (const docId in this.formData.documents) {
+            if (this.formData.documents[docId] && Array.isArray(this.formData.documents[docId])) {
+                totalFiles += this.formData.documents[docId].length;
+            }
+        }
+        
+        if (totalFiles >= maxFiles) {
+            alert(`Maximum ${maxFiles} files allowed. Please remove a file before adding another.`);
+            return false;
+        }
+        
         if (file.size > maxSize) {
-            alert('File size must be less than 20MB');
+            alert('File size must be less than 5MB');
             return false;
         }
         
@@ -3381,25 +3395,41 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
             this.formData.documents[docId] = [];
         }
         
-        // Add file (in real app, this would upload to server)
-        const fileObj = {
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            lastModified: file.lastModified
+        // Convert file to base64 for email attachment
+        const reader = new FileReader();
+        
+        reader.onload = (e) => {
+            // Extract base64 content (remove "data:mime;base64," prefix)
+            const base64Content = e.target.result.split(',')[1];
+            
+            const fileObj = {
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                lastModified: file.lastModified,
+                content: base64Content  // Store base64 for email attachment
+            };
+            
+            this.formData.documents[docId].push(fileObj);
+            
+            // Update UI
+            const filesContainer = document.getElementById(`files_${docId}`);
+            if (filesContainer) {
+                filesContainer.innerHTML = this.renderUploadedFiles(docId);
+                // Event delegation handles remove buttons automatically
+            }
+            
+            // Update readiness score
+            this.calculateReadinessScore();
         };
         
-        this.formData.documents[docId].push(fileObj);
+        reader.onerror = (error) => {
+            console.error('Error reading file:', error);
+            alert('Failed to read file. Please try again.');
+        };
         
-        // Update UI
-        const filesContainer = document.getElementById(`files_${docId}`);
-        if (filesContainer) {
-            filesContainer.innerHTML = this.renderUploadedFiles(docId);
-            // Event delegation handles remove buttons automatically
-        }
-        
-        // Update readiness score
-        this.calculateReadinessScore();
+        // Read file as data URL (base64)
+        reader.readAsDataURL(file);
     }
     
     removeFile(docId, fileName) {
@@ -3747,6 +3777,16 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
 
             // Store record ID for potential updates
             this.formData.airtable_record_id = submissionResult.recordId;
+
+            // Send documents email via Mandrill (non-blocking)
+            // If email fails, don't prevent user from seeing success screen
+            try {
+                await this.sendDocumentsEmail();
+            } catch (emailError) {
+                console.error('⚠️ Email sending failed (non-critical):', emailError);
+                // Email failure is logged but doesn't break the submission flow
+                // Broker will still see submission in Airtable
+            }
 
             // Show success screen
             this.showResults();
@@ -6004,6 +6044,67 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
                 success: false,
                 error: error.message
             };
+        }
+    }
+
+    /**
+     * Send documents email via Mandrill
+     * Sends form submission summary with file attachments to documents@easyfreight.co.nz
+     * Called only on final form submission (not during auto-save)
+     */
+    async sendDocumentsEmail() {
+        try {
+            // Collect all uploaded files with base64 content
+            const attachments = [];
+            for (const [docId, files] of Object.entries(this.formData.documents)) {
+                if (files && Array.isArray(files)) {
+                    files.forEach(file => {
+                        if (file.content) {  // Only include files with base64 content
+                            attachments.push({
+                                type: file.type,
+                                name: file.name,
+                                content: file.content  // Already base64
+                            });
+                        }
+                    });
+                }
+            }
+            
+            // Prepare email payload
+            const emailPayload = {
+                formData: {
+                    first_name: this.formData.first_name,
+                    last_name: this.formData.last_name,
+                    email: this.formData.email,
+                    phone: this.formData.phone,
+                    company_name: this.formData.company_name || ''
+                },
+                submissionSummary: this.generateSubmissionSummary(true),
+                attachments: attachments,
+                quoteReference: this.generateReferenceId()
+            };
+            
+            console.log(`📧 Sending email with ${attachments.length} attachment(s)...`);
+            
+            // Call Netlify function
+            const response = await fetch('/.netlify/functions/send-documents-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(emailPayload)
+            });
+            
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(result.error || 'Email sending failed');
+            }
+            
+            console.log('✅ Documents email sent successfully');
+            return { success: true };
+            
+        } catch (error) {
+            console.error('❌ Error sending documents email:', error);
+            throw error;
         }
     }
 
