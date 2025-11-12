@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Function Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-8">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">📧 Email Function Test</h1>
+        
+        <div id="status" class="mb-6 p-4 rounded hidden"></div>
+        
+        <button 
+            id="testBtn"
+            class="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+        >
+            Send Test Email
+        </button>
+        
+        <div class="mt-6 bg-gray-50 p-4 rounded">
+            <h3 class="font-semibold mb-2">Test Details:</h3>
+            <ul class="text-sm text-gray-600 space-y-1">
+                <li>• To: documents@easyfreight.co.nz</li>
+                <li>• From: contact_form@easyfreight.co.nz</li>
+                <li>• Subject: Test Email - [timestamp]</li>
+                <li>• Attachments: None</li>
+            </ul>
+        </div>
+        
+        <div class="mt-6">
+            <h3 class="font-semibold mb-2">Console Output:</h3>
+            <pre id="console" class="bg-black text-green-400 p-4 rounded text-xs overflow-auto max-h-96"></pre>
+        </div>
+    </div>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+        const consoleDiv = document.getElementById('console');
+        const testBtn = document.getElementById('testBtn');
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toISOString();
+            const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : '📝';
+            const logMessage = `[${timestamp}] ${prefix} ${message}\n`;
+            consoleDiv.textContent += logMessage;
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+            console.log(message);
+        }
+        
+        function showStatus(message, isError = false) {
+            statusDiv.classList.remove('hidden', 'bg-red-100', 'text-red-800', 'bg-green-100', 'text-green-800');
+            statusDiv.classList.add(isError ? 'bg-red-100' : 'bg-green-100');
+            statusDiv.classList.add(isError ? 'text-red-800' : 'text-green-800');
+            statusDiv.textContent = message;
+        }
+        
+        async function testEmailFunction() {
+            testBtn.disabled = true;
+            testBtn.textContent = 'Sending...';
+            consoleDiv.textContent = '';
+            
+            log('Starting email test...');
+            
+            const testPayload = {
+                formData: {
+                    first_name: 'Test',
+                    last_name: 'User',
+                    email: 'test@example.com',
+                    phone: '021 123 4567',
+                    company_name: 'Test Company Ltd'
+                },
+                submissionSummary: `
+                    <html>
+                    <body style="font-family: Arial, sans-serif; padding: 20px;">
+                        <h1 style="color: #333;">Test Email Submission</h1>
+                        <p>This is a test email from the Easy Freight quote system.</p>
+                        <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                            <h3>Contact Details:</h3>
+                            <p><strong>Name:</strong> Test User</p>
+                            <p><strong>Email:</strong> test@example.com</p>
+                            <p><strong>Phone:</strong> 021 123 4567</p>
+                            <p><strong>Company:</strong> Test Company Ltd</p>
+                        </div>
+                        <p style="color: #666; font-size: 12px;">
+                            Test timestamp: ${new Date().toISOString()}
+                        </p>
+                    </body>
+                    </html>
+                `,
+                attachments: [],
+                quoteReference: 'TEST-' + Date.now()
+            };
+            
+            log('Payload prepared');
+            log(`Quote reference: ${testPayload.quoteReference}`);
+            
+            try {
+                log('Calling Netlify function...');
+                
+                const response = await fetch('/.netlify/functions/send-documents-email', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(testPayload)
+                });
+                
+                log(`Response status: ${response.status} ${response.statusText}`);
+                
+                let result;
+                try {
+                    result = await response.json();
+                    log('Response body: ' + JSON.stringify(result, null, 2));
+                } catch (parseError) {
+                    log('Failed to parse JSON response', 'error');
+                    const text = await response.text();
+                    log('Raw response: ' + text, 'error');
+                    throw new Error('Invalid JSON response from server');
+                }
+                
+                if (response.ok && result.success) {
+                    log('✅ Email sent successfully!', 'success');
+                    log(`Message ID: ${result.messageId}`);
+                    log(`Status: ${result.status}`);
+                    showStatus('✅ Email sent successfully! Check documents@easyfreight.co.nz inbox (and spam folder).');
+                } else {
+                    log(`❌ Email sending failed: ${result.error}`, 'error');
+                    showStatus(`❌ Error: ${result.error}`, true);
+                }
+                
+            } catch (error) {
+                log(`❌ Request failed: ${error.message}`, 'error');
+                showStatus(`❌ Request failed: ${error.message}`, true);
+            } finally {
+                testBtn.disabled = false;
+                testBtn.textContent = 'Send Test Email';
+            }
+        }
+        
+        testBtn.addEventListener('click', testEmailFunction);
+        
+        log('Test page loaded. Click button to send test email.');
+    </script>
+</body>
+</html>
