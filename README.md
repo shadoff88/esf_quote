@@ -11,7 +11,7 @@
 
 **Project Type:** Static HTML/CSS/JavaScript application with serverless backend integration
 
-**Last Updated:** 10th November 2025 (v20251110d)
+**Last Updated:** 12th November 2025 (v20251112a)
 
 ---
 
@@ -24,11 +24,12 @@
 - **Session Persistence** - Zero data loss with localStorage backup
 - **Responsive Design** - Mobile-optimised with TailwindCSS
 - **Smart Routing Logic** - Automatically routes to urgent/standard/specialist/education pathways
-- **File Upload with Base64** - Convert files to base64 for email attachments ✨ NEW
+- **File Upload with Base64** - Convert files to base64 for email attachments ✨ UPDATED
   - 5MB maximum per file (changed from 20MB)
   - 5 files maximum total (25MB combined)
   - Files stored in browser memory only (not in Airtable)
   - PDF, JPG, PNG formats supported
+  - Security badge showing SSL/TLS 256-bit encryption ✨ NEW
 - **Google Places Autocomplete** - NZ address validation for delivery locations
 - **Container Calculator** - Modal calculator for container space estimation
 
@@ -390,6 +391,40 @@ netlify dev
 - ✅ Added API key whitespace trimming
 - ✅ Enhanced error logging for debugging
 - ✅ Email integration now fully functional
+
+---
+
+### Version 20251112a - Security Badge for Document Upload
+**Status:** ✅ DEPLOYED  
+**Date:** 12th November 2025
+
+**Feature: Trust-Building Security Badge**
+
+**Visual Security Indicator:**
+- ✅ Professional security badge on document upload page
+- ✅ SSL/TLS 256-bit encryption indicator
+- ✅ Shield icon with frosted glass effect
+- ✅ Lock icon with "Secure & Encrypted Upload" heading
+- ✅ Blue gradient design (#1e3a8a to #3b82f6)
+- ✅ Mobile-responsive flexbox layout
+
+**Badge Elements:**
+```
+┌─────────────────────────────────────────────────────┐
+│ 🛡️  🔒 Secure & Encrypted Upload      SSL/TLS     │
+│     Your documents are encrypted        256-bit     │
+│     Maximum 5MB per file, 5 files total            │
+└─────────────────────────────────────────────────────┘
+```
+
+**UX Benefits:**
+- ✅ Builds user trust for sensitive customs documents
+- ✅ Clearly communicates security measures
+- ✅ Shows file size limits prominently (5MB per file, 5 files total)
+- ✅ Professional appearance matching brand identity
+- ✅ Responsive design works on all devices
+
+**Location:** Document upload step (between step header and document list)
 
 ---
 
