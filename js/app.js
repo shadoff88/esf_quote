@@ -3419,6 +3419,35 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
             this.formData.documents[docId] = [];
         }
         
+        // Show loading indicator in the file container
+        const filesContainer = document.getElementById(`files_${docId}`);
+        if (filesContainer) {
+            const loadingHTML = `
+                <div class="file-loading" style="
+                    display: flex;
+                    align-items: center;
+                    gap: 0.75rem;
+                    padding: 1rem;
+                    background: #f0f9ff;
+                    border: 2px dashed #3b82f6;
+                    border-radius: 0.5rem;
+                    margin-top: 0.5rem;
+                    animation: pulse 1.5s ease-in-out infinite;
+                ">
+                    <i class="fas fa-spinner fa-spin" style="color: #3b82f6; font-size: 1.25rem;"></i>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: #1e40af; font-size: 0.875rem;">
+                            Processing ${file.name}
+                        </div>
+                        <div style="color: #64748b; font-size: 0.75rem;">
+                            Converting to secure format...
+                        </div>
+                    </div>
+                </div>
+            `;
+            filesContainer.insertAdjacentHTML('beforeend', loadingHTML);
+        }
+        
         // Convert file to base64 for email attachment
         const reader = new FileReader();
         
@@ -3436,9 +3465,15 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
             
             this.formData.documents[docId].push(fileObj);
             
-            // Update UI
-            const filesContainer = document.getElementById(`files_${docId}`);
+            // Remove loading indicator and update UI
             if (filesContainer) {
+                // Remove loading indicator
+                const loadingElement = filesContainer.querySelector('.file-loading');
+                if (loadingElement) {
+                    loadingElement.remove();
+                }
+                
+                // Re-render all uploaded files
                 filesContainer.innerHTML = this.renderUploadedFiles(docId);
                 // Event delegation handles remove buttons automatically
             }
@@ -3449,6 +3484,15 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
         
         reader.onerror = (error) => {
             console.error('Error reading file:', error);
+            
+            // Remove loading indicator
+            if (filesContainer) {
+                const loadingElement = filesContainer.querySelector('.file-loading');
+                if (loadingElement) {
+                    loadingElement.remove();
+                }
+            }
+            
             alert('Failed to read file. Please try again.');
         };
         
@@ -3782,6 +3826,24 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
     }
     
     async submitForm() {
+        // Prevent double submission and show loading state
+        if (this.submitBtn.disabled) {
+            return; // Already submitting
+        }
+
+        // Store original button state
+        const originalText = this.submitBtn.innerHTML;
+        const originalDisabled = this.submitBtn.disabled;
+
+        // Set loading state
+        this.submitBtn.disabled = true;
+        this.submitBtn.innerHTML = `
+            <i class="fas fa-spinner fa-spin" style="margin-right: 0.5rem;"></i>
+            Processing...
+        `;
+        this.submitBtn.style.cursor = 'wait';
+        this.submitBtn.style.opacity = '0.8';
+
         // Mark session as completed
         if (this.sessionId) {
             this.updateSession({
@@ -3818,6 +3880,13 @@ const sessionRef = `EF-${year}${month}${day}${hours}${minutes}${seconds}`;
 
         } catch (error) {
             console.error('Form submission error:', error);
+            
+            // Restore button state on error
+            this.submitBtn.disabled = originalDisabled;
+            this.submitBtn.innerHTML = originalText;
+            this.submitBtn.style.cursor = 'pointer';
+            this.submitBtn.style.opacity = '1';
+            
             this.showSubmissionError(error.message);
         }
     }

@@ -1419,3 +1419,13 @@ body {
 .pac-container.pac-logo {
     padding-bottom: 8px !important;
 }
+
+/* Loading Animation for File Processing */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.6;
+    }
+}
